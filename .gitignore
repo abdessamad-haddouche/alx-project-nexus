@@ -582,42 +582,8 @@ local_settings.py
 planning/
 planning/**
 
-# Files ending with 2 or 3 (any extension)
+# Files ending with 2 or 3 (any extension or no extension)
 *2
 *3
-*.md2
-*.md3
-*.py2
-*.py3
-*.env2
-*.env3
-*.txt2
-*.txt3
-*.json2
-*.json3
-*.sql2
-*.sql3
-*.js2
-*.js3
-*.ts2
-*.ts3
-*.tsx2
-*.tsx3
-*.css2
-*.css3
-*.html2
-*.html3
-*.yml2
-*.yml3
-*.yaml2
-*.yaml3
-*.xml2
-*.xml3
-*.sh2
-*.sh3
-*.conf2
-*.conf3
-*.ini2
-*.ini3
-*.cfg2
-*.cfg3
+*2.*
+*3.*
