@@ -43,10 +43,14 @@ DJANGO_APPS = [
 ]
 
 # Third-party apps
-THIRD_PARTY_APPS = []
+THIRD_PARTY_APPS = [
+    "rest_framework",
+    "rest_framework.authtoken",
+    "corsheaders",
+]
 
 # Local apps
-LOCAL_APPS = []
+LOCAL_APPS = ["core"]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
