@@ -6,8 +6,8 @@ Environment-specific settings go in development.py, production.py, testing.py
 """
 
 from pathlib import Path
+
 from decouple import config
-import os
 
 # ================================================================
 # PATHS & DIRECTORIES
@@ -17,14 +17,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ================================================================
 # SECURITY SETTINGS
 # ================================================================
-SECRET_KEY = config('SECRET_KEY', default='5+d_&-9y-s9d-_rv3i%1go84wxkyl^xzjudk^kdu7$@#2_)%+v')
+SECRET_KEY = config(
+    "SECRET_KEY", default="5+d_&-9y-s9d-_rv3i%1go84wxkyl^xzjudk^kdu7$@#2_)%+v"
+)
 
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = config(
-    'ALLOWED_HOSTS',
-    default='',
-    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
+    "ALLOWED_HOSTS",
+    default="",
+    cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
 # ================================================================
@@ -96,8 +98,16 @@ WSGI_APPLICATION = "movie_nexus.wsgi.application"
 # ================================================================
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": config("DB_NAME", default="nexus_movie_dev"),
+        "USER": config("DB_USER", default="movie_nexus_user"),
+        "PASSWORD": config("DB_PASSWORD"),
+        "HOST": config("DB_HOST", default="localhost"),
+        "PORT": config("DB_PORT", default="5432"),
+        "CONN_MAX_AGE": 600,
+        "OPTIONS": {
+            "connect_timeout": 10,
+        },
     }
 }
 
@@ -106,26 +116,30 @@ DATABASES = {
 # ================================================================
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "UserAttributeSimilarityValidator"
+        ),
     },
     {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "NAME": ("django.contrib.auth.password_validation." "MinimumLengthValidator"),
     },
     {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+        "NAME": ("django.contrib.auth.password_validation." "CommonPasswordValidator"),
     },
     {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+        "NAME": ("django.contrib.auth.password_validation." "NumericPasswordValidator"),
     },
 ]
+
 
 # ================================================================
 # INTERNATIONALIZATION
 # ================================================================
-LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
-TIME_ZONE = config('TIME_ZONE', default='UTC')
-USE_I18N = config('USE_I18N', default=True, cast=bool)
-USE_TZ = config('USE_TZ', default=True, cast=bool)
+LANGUAGE_CODE = config("LANGUAGE_CODE", default="en-us")
+TIME_ZONE = config("TIME_ZONE", default="UTC")
+USE_I18N = config("USE_I18N", default=True, cast=bool)
+USE_TZ = config("USE_TZ", default=True, cast=bool)
 
 # ================================================================
 # STATIC FILES CONFIGURATION
