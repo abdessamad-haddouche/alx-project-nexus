@@ -4,21 +4,22 @@ Development settings for Movie Nexus
 Inherits from base.py and adds development-specific configurations
 """
 
-from .base import *
 from decouple import config
+
+from .base import *
 
 # ===========================
 # DEBUG SETTINGS
 # ===========================
-DEBUG = config('DEBUG', default=True, cast=bool)
+DEBUG = config("DEBUG", default=True, cast=bool)
 
 # ===========================
 # ALLOWED HOSTS
 # ===========================
 ALLOWED_HOSTS = config(
-    'ALLOWED_HOSTS',
-    default='',
-    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
+    "ALLOWED_HOSTS",
+    default="",
+    cast=lambda v: [s.strip() for s in v.split(",") if s.strip()],
 )
 
 DEV_ALLOWED_HOSTS = []

@@ -18,13 +18,17 @@ import os
 import sys
 
 # Auto-detect environment if DJANGO_SETTINGS_MODULE is not set
-if 'DJANGO_SETTINGS_MODULE' not in os.environ:
+if "DJANGO_SETTINGS_MODULE" not in os.environ:
     # Check for common test indicators
-    if 'test' in sys.argv or 'pytest' in sys.modules:
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_nexus.settings.testing')
+    if "test" in sys.argv or "pytest" in sys.modules:
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "movie_nexus.settings.testing")
     # Check for production indicators
-    elif os.environ.get('ENVIRONMENT') == 'production':
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_nexus.settings.production')
+    elif os.environ.get("ENVIRONMENT") == "production":
+        os.environ.setdefault(
+            "DJANGO_SETTINGS_MODULE", "movie_nexus.settings.production"
+        )
     # Default to development
     else:
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'movie_nexus.settings.development')
+        os.environ.setdefault(
+            "DJANGO_SETTINGS_MODULE", "movie_nexus.settings.development"
+        )

@@ -2,6 +2,7 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
+
 from decouple import config
 
 
@@ -9,8 +10,8 @@ def main():
     """Run administrative tasks."""
     # Use environment variable with fallback
     os.environ.setdefault(
-        'DJANGO_SETTINGS_MODULE', 
-        config('DJANGO_SETTINGS_MODULE', default='movie_nexus.settings.development')
+        "DJANGO_SETTINGS_MODULE",
+        config("DJANGO_SETTINGS_MODULE", default="movie_nexus.settings.development"),
     )
     try:
         from django.core.management import execute_from_command_line
