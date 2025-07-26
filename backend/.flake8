@@ -1,0 +1,13 @@
+[flake8]
+max-line-length = 88
+ignore = E203,W503
+exclude =
+    migrations,
+    __pycache__,
+    manage.py,
+    movie_nexus/settings/*,
+    .venv,
+    .git,
+    .pytest_cache,
+    **/migrations/**,
+    **/__pycache__/**
