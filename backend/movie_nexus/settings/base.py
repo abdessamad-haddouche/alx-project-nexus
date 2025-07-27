@@ -149,6 +149,21 @@ USE_TZ = config("USE_TZ", default=True, cast=bool)
 # STATIC FILES CONFIGURATION
 # ================================================================
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
+
+STATICFILES_FINDERS = [
+    "django.contrib.staticfiles.finders.FileSystemFinder",
+    "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+]
+
+# ================================================================
+# MEDIA FILES CONFIGURATION
+# ================================================================
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # ================================================================
 # DEFAULT PRIMARY KEY FIELD TYPE
