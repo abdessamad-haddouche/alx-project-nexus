@@ -1,12 +1,16 @@
 """
 Authentication API views.
-Handles user registration, login, logout, and token management.
+Handles user registration, login, logout, OAuth, and token management.
 """
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 
 from ..base import SuccessResponse
+
+# ================================================================
+# Core Authentication
+# ================================================================
 
 
 class UserRegistrationView(APIView):
@@ -137,18 +141,92 @@ class PasswordChangeView(APIView):
         )
 
 
-class EmailVerificationView(APIView):
+# ================================================================
+# OAuth & Social Authentication
+# ================================================================
+
+
+class GoogleOAuthView(APIView):
     """
-    Email verification endpoint.
-    POST /api/v1/auth/email/verify/
+    Google OAuth initiation endpoint.
+    POST /api/v1/auth/google/
     """
 
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # TODO: Implement Google OAuth initiation logic
+        return SuccessResponse.create(
+            "Google OAuth endpoint - to be implemented",
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        )
+
+
+class FacebookOAuthView(APIView):
+    """
+    Facebook OAuth initiation endpoint.
+    POST /api/v1/auth/facebook/
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # TODO: Implement Facebook OAuth initiation logic
+        return SuccessResponse.create(
+            "Facebook OAuth endpoint - to be implemented",
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        )
+
+
+class GoogleCallbackView(APIView):
+    """
+    Google OAuth callback endpoint.
+    GET /api/v1/auth/google/callback/
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # TODO: Implement Google OAuth callback logic
+        return SuccessResponse.create(
+            "Google OAuth callback endpoint - to be implemented",
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        )
+
+
+class FacebookCallbackView(APIView):
+    """
+    Facebook OAuth callback endpoint.
+    GET /api/v1/auth/facebook/callback/
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # TODO: Implement Facebook OAuth callback logic
+        return SuccessResponse.create(
+            "Facebook OAuth callback endpoint - to be implemented",
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        )
+
+
+# ================================================================
+# Email Verification & Password Recovery
+# ================================================================
+
+
+class EmailVerificationView(APIView):
+    """
+    Email verification endpoint.
+    GET /api/v1/auth/verify-email/<token>/
+    """
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, token):
         # TODO: Implement email verification logic
         return SuccessResponse.create(
-            "Email verification endpoint - to be implemented",
+            f"Email verification endpoint for token {token} - to be implemented",
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
         )
 
@@ -156,7 +234,7 @@ class EmailVerificationView(APIView):
 class ResendEmailVerificationView(APIView):
     """
     Resend email verification endpoint.
-    POST /api/v1/auth/email/resend/
+    POST /api/v1/auth/resend-verification/
     """
 
     permission_classes = [IsAuthenticated]
