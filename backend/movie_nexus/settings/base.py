@@ -30,6 +30,11 @@ ALLOWED_HOSTS = config(
 )
 
 # ================================================================
+# CUSTOM USER MODEL
+# ================================================================
+AUTH_USER_MODEL = "authentication.User"
+
+# ================================================================
 # APPLICATION DEFINITION
 # ================================================================
 # Django core apps
@@ -50,7 +55,10 @@ THIRD_PARTY_APPS = [
 ]
 
 # Local apps
-LOCAL_APPS = ["core"]
+LOCAL_APPS = [
+    "core",
+    "apps.authentication",
+]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -103,7 +111,7 @@ WSGI_APPLICATION = "movie_nexus.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME", default="nexus_movie_dev"),
+        "NAME": config("DB_NAME", default="movie_nexus_dev"),
         "USER": config("DB_USER", default="movie_nexus_user"),
         "PASSWORD": config("DB_PASSWORD"),
         "HOST": config("DB_HOST", default="localhost"),
