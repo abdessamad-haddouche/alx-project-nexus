@@ -306,3 +306,13 @@ DEFAULT_MOVIE_PREFERENCES = {
     "max_year": None,  # Maximum release year (None = current)
     "discovery_factor": 0.3,  # 0.0 = safe, 1.0 = adventurous
 }
+
+# Verification token expiration times (in hours)
+
+DEFAULT_VERIFICATION_EXPIRATION_HOURS = 24
+
+VERIFICATION_EXPIRATION_HOURS = {
+    VerificationType.REGISTRATION: 24,  # 24 hours for registration
+    VerificationType.EMAIL_CHANGE: 2,  # 2 hours for email change (more sensitive)
+    VerificationType.PASSWORD_RESET: 1,  # 1 hour for password reset (most sensitive)
+}
