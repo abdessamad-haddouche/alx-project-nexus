@@ -163,6 +163,39 @@ class ActivityType(models.TextChoices):
     RECOMMEND = "recommend", _("Recommended to Others")
 
 
+class DeviceType(models.TextChoices):
+    """Device types for activity tracking."""
+
+    DESKTOP = "desktop", _("Desktop")
+    MOBILE = "mobile", _("Mobile")
+    TABLET = "tablet", _("Tablet")
+    TV = "tv", _("TV")
+    UNKNOWN = "unknown", _("Unknown")
+
+
+# ================================================================
+# SESSION MANAGEMENT CONSTANTS
+# ================================================================
+
+
+class LoginMethod(models.TextChoices):
+    """Authentication methods for user sessions."""
+
+    PASSWORD = "password", _("Email/Password")
+    GOOGLE = "google", _("Google OAuth")
+    FACEBOOK = "facebook", _("Facebook OAuth")
+    TOKEN_REFRESH = "token_refresh", _("JWT Token Refresh")
+
+
+class SessionStatus(models.TextChoices):
+    """User session status options."""
+
+    ACTIVE = "active", _("Active")
+    EXPIRED = "expired", _("Expired")
+    TERMINATED = "terminated", _("Terminated")
+    SUSPENDED = "suspended", _("Suspended")
+
+
 # ================================================================
 # RECOMMENDATIONS & ALGORITHMS
 # ================================================================
@@ -316,3 +349,6 @@ VERIFICATION_EXPIRATION_HOURS = {
     VerificationType.EMAIL_CHANGE: 2,  # 2 hours for email change (more sensitive)
     VerificationType.PASSWORD_RESET: 1,  # 1 hour for password reset (most sensitive)
 }
+
+# Session expiration settings
+DEFAULT_SESSION_EXPIRATION_HOURS = 24  # Standard session lifetime

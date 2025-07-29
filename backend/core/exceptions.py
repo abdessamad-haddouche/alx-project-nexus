@@ -206,6 +206,13 @@ class NotFoundException(ResourceException):
     pass
 
 
+class SessionNotFoundException(ResourceException):
+    """Raised when a user session cannot be found."""
+
+    default_detail = _("Session not found.")
+    default_code = "session_not_found"
+
+
 class UserNotFoundException(ResourceException):
     """Raised when a user cannot be found."""
 
