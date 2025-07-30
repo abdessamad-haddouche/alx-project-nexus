@@ -5,6 +5,7 @@ This file contains settings that are SHARED across all environments.
 Environment-specific settings go in development.py, production.py, testing.py
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 from decouple import config
@@ -75,6 +76,64 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+
+# ================================================================
+# REST FRAMEWORK CONFIGURATION
+# ================================================================
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": (
+        "rest_framework_simplejwt.authentication.default_user_authentication_rule"
+    ),
+}
+
+# Make sure REST_FRAMEWORK is also configured
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ],
+}
+
+# ================================================================
+# JWT CONFIGURATION
+# ================================================================
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": (
+        "rest_framework_simplejwt.authentication.default_user_authentication_rule"
+    ),
+}
 
 # ================================================================
 # URL CONFIGURATION
@@ -177,3 +236,20 @@ MEDIA_ROOT = BASE_DIR / "media"
 # DEFAULT PRIMARY KEY FIELD TYPE
 # ================================================================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ================================================================
+# EMAIL CONFIGURATION - ADD THIS FOR EMAIL SERVICES
+# ================================================================
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"  # Development
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="noreply@movienexus.com")
+EMAIL_HOST = config("EMAIL_HOST", default="localhost")
+EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
+EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
+EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+
+# ================================================================
+# SITE CONFIGURATION - ADD THIS FOR EMAIL TEMPLATES
+# ================================================================
+SITE_NAME = config("SITE_NAME", default="Movie Nexus")
+FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
