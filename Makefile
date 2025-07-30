@@ -10,9 +10,13 @@ help:
 	@echo "  format         Format code"
 	@echo "  migrate        Run database migrations"
 	@echo "  run            Run development server"
+	@echo "  db-start       Start PostgreSQL service"
+	@echo "  db-stop        Stop PostgreSQL service"
 	@echo "  shell          Open Django shell"
 	@echo "  setup-frontend Setup React frontend (optional)"
 	@echo "  clean          Clean cache and temporary files"
+	@echo "  tree-clean     Show directory structure (optional)"
+	@echo "  db-access      Access PostgreSQL database with credentials"
 
 install:
 	pip install -r backend/requirements/production.txt
@@ -41,6 +45,12 @@ migrate:
 run:
 	cd backend && python manage.py runserver
 
+db-start:
+	sudo service postgresql start
+
+db-stop:
+	sudo service postgresql stop
+
 shell:
 	cd backend && python manage.py shell
 
@@ -54,3 +64,9 @@ clean:
 	find . -type f -name "*.pyo" -delete
 	find . -type f -name ".coverage" -delete
 	find . -type d -name "*.egg-info" -exec rm -rf {} +
+
+tree-clean:
+	tree -I '*[0-9]*|__pycache__|.venv|planning'
+
+db-access:
+	psql -h localhost -p 5432 -U movie_nexus_user -d movie_nexus_dev
