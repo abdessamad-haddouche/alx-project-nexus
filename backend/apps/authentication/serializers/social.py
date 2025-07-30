@@ -16,14 +16,9 @@ from ..models import SocialAuth, UserProfile
 User = get_user_model()
 
 
-# ================================================================
-# ESSENTIAL SOCIAL AUTH SERIALIZERS
-# ================================================================
-
-
 class SocialAuthSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer):
     """
-    Essential social auth serializer for viewing linked accounts.
+    Social auth serializer for viewing linked accounts.
     """
 
     user_email = serializers.EmailField(source="user.email", read_only=True)
@@ -52,7 +47,7 @@ class SocialAuthSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer)
 
 class GoogleOAuthSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential Google OAuth login/registration serializer.
+    Google OAuth login/registration serializer.
     """
 
     access_token = serializers.CharField(write_only=True)
@@ -68,13 +63,13 @@ class GoogleOAuthSerializer(BaseAuthSerializerMixin, serializers.Serializer):
         Validate Google access token and get user info.
         Simplified version - in production you'd verify with Google API.
         """
-        # TODO: In production, verify token with Google API
+        # TODO: verify token with Google API
 
         google_user_data = {
-            "id": "123456789",  # This would come from Google
-            "email": "user@gmail.com",  # This would come from Google
-            "name": "John Doe",  # This would come from Google
-            "picture": "https://example.com/picture.jpg",  # This would come from Google
+            "id": "123456789",
+            "email": "user@gmail.com",
+            "name": "John Doe",
+            "picture": "https://example.com/picture.jpg",
         }
 
         return google_user_data
@@ -201,7 +196,7 @@ class GoogleOAuthSerializer(BaseAuthSerializerMixin, serializers.Serializer):
 
 class SocialAuthLinkSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential serializer for linking social accounts to existing user.
+    Serializer for linking social accounts to existing user.
     """
 
     provider = serializers.ChoiceField(choices=AuthProvider.choices)

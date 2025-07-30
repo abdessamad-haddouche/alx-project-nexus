@@ -16,7 +16,7 @@ User = get_user_model()
 
 class UserSessionSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer):
     """
-    Essential user session serializer for viewing sessions.
+    User session serializer for viewing sessions.
     """
 
     # Read-only computed fields
@@ -86,7 +86,7 @@ class UserSessionSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer
 
 class SessionListSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential serializer for listing user sessions.
+    Serializer for listing user sessions.
     """
 
     def to_representation(self, instance):
@@ -113,7 +113,7 @@ class SessionListSerializer(BaseAuthSerializerMixin, serializers.Serializer):
 
 class SessionTerminateSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential serializer for terminating sessions.
+    Serializer for terminating sessions.
     """
 
     session_id = serializers.UUIDField(required=False)
@@ -209,7 +209,7 @@ class SessionTerminateSerializer(BaseAuthSerializerMixin, serializers.Serializer
 
 class CurrentSessionSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential serializer for getting current session info.
+    Serializer for getting current session info.
     """
 
     def to_representation(self, instance):

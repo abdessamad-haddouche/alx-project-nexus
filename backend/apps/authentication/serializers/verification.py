@@ -17,7 +17,7 @@ User = get_user_model()
 
 class EmailVerificationSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential email verification serializer.
+    Email verification serializer.
     """
 
     token = serializers.CharField()
@@ -62,7 +62,7 @@ class EmailVerificationSerializer(BaseAuthSerializerMixin, serializers.Serialize
 
 class ResendVerificationSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential resend verification serializer.
+    Resend verification serializer.
     """
 
     email = serializers.EmailField()

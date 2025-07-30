@@ -16,14 +16,9 @@ from ..models import UserProfile, VerificationToken
 User = get_user_model()
 
 
-# ================================================================
-# ESSENTIAL USER SERIALIZERS
-# ================================================================
-
-
 class UserSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer):
     """
-    Essential user serializer for profile management.
+    User serializer for profile management.
     """
 
     # Read-only computed fields
@@ -78,7 +73,7 @@ class UserSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer):
 
 class UserProfileSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer):
     """
-    Essential user profile serializer.
+    User profile serializer.
     """
 
     # User info (read-only)
@@ -116,14 +111,9 @@ class UserProfileSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer
         return value
 
 
-# ================================================================
-# AUTHENTICATION FLOW SERIALIZERS
-# ================================================================
-
-
 class UserRegistrationSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer):
     """
-    Essential user registration serializer.
+    User registration serializer.
     """
 
     password = serializers.CharField(write_only=True, min_length=8)
@@ -200,7 +190,7 @@ class UserRegistrationSerializer(BaseAuthSerializerMixin, serializers.ModelSeria
 
 class UserLoginSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential user login serializer.
+    User login serializer.
     """
 
     email = serializers.EmailField()
@@ -278,7 +268,7 @@ class UserLoginSerializer(BaseAuthSerializerMixin, serializers.Serializer):
 
 class PasswordResetRequestSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential password reset request serializer.
+    Password reset request serializer.
     """
 
     email = serializers.EmailField()
@@ -329,7 +319,7 @@ class PasswordResetRequestSerializer(BaseAuthSerializerMixin, serializers.Serial
 
 class PasswordResetConfirmSerializer(BaseAuthSerializerMixin, serializers.Serializer):
     """
-    Essential password reset confirmation serializer.
+    Password reset confirmation serializer.
     """
 
     token = serializers.CharField()
@@ -377,50 +367,5 @@ class PasswordResetConfirmSerializer(BaseAuthSerializerMixin, serializers.Serial
                 "id": user.id,
                 "email": user.email,
                 "full_name": user.full_name,
-            },
-        }
-
-
-class EmailVerificationSerializer(BaseAuthSerializerMixin, serializers.Serializer):
-    """
-    Essential email verification serializer.
-    """
-
-    token = serializers.CharField()
-
-    def validate_token(self, value):
-        """Validate verification token."""
-        try:
-            verification = VerificationToken.objects.get_valid_token(value)
-            if verification.verification_type != VerificationType.REGISTRATION:
-                raise serializers.ValidationError(_("Invalid token type"))
-            return verification
-        except Exception:
-            raise serializers.ValidationError(_("Invalid or expired token"))
-
-    def create(self, validated_data):
-        """Verify user email."""
-        verification_token = validated_data["token"]
-        user = verification_token.user
-
-        # Verify the token
-        verification_token.verify()
-
-        # Update user email verification status
-        user.verify_email()
-
-        return {"user": user}
-
-    def to_representation(self, instance):
-        """Return verification success response."""
-        user = instance["user"]
-
-        return {
-            "message": _("Email verified successfully"),
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "is_email_verified": user.is_email_verified,
             },
         }
