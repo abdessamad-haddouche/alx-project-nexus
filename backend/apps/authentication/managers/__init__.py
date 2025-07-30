@@ -3,6 +3,7 @@
 Authentication app managers.
 """
 
+from .session import UserSessionManager
 from .social import SocialAuthManager
 from .user import UserManager, UserProfileManager
 from .verification import TokenVerificationManager
@@ -15,4 +16,6 @@ __all__ = [
     "SocialAuthManager",
     # TokenVerification Model Managers
     "TokenVerificationManager",
+    # UserSession Model Managers
+    "UserSessionManager",
 ]

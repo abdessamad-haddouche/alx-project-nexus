@@ -1,41 +1,22 @@
 """
 User-related models for Movie Nexus authentication.
-
-Contains User and UserProfile models with mixin-based architecture.
 """
 
 from django.contrib.auth.models import AbstractUser
-from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-# Import constants
 from core.constants import Language, PrivacyLevel, ThemePreference, Timezone, UserRole
 from core.defaults import get_default_notification_preferences
-
-# Import exceptions
-from core.exceptions import EmailNotVerifiedException, ValidationException
-
-# Import mixins
 from core.mixins import BaseModelMixin, TimeStampedMixin
 
-# Import managers from this app
 from ..managers import UserManager, UserProfileManager
-
-# ================================================================
-# USER MODEL
-# ================================================================
 
 
 class User(AbstractUser, TimeStampedMixin):
     """
     Custom user model using email as the unique identifier.
-
-    Uses:
-    - AbstractUser: Django's built-in user functionality
-    - TimeStampedMixin: Automatic timestamp tracking (created_at, updated_at)
     """
 
     # Remove username field from AbstractUser
@@ -132,79 +113,10 @@ class User(AbstractUser, TimeStampedMixin):
     def __str__(self):
         return self.email
 
-    def clean(self):
-        """Custom validation for the User model."""
-        super().clean()
-
-        # Normalize email
-        if self.email:
-            self.email = self.email.lower().strip()
-
-        # Normalize names
-        if self.first_name:
-            self.first_name = self.first_name.strip().title()
-
-        if self.last_name:
-            self.last_name = self.last_name.strip().title()
-
-        # Validate date of birth
-        if self.date_of_birth and self.date_of_birth >= timezone.now().date():
-            raise ValidationError(
-                {"date_of_birth": _("Date of birth must be in the past.")}
-            )
-
-    def save(self, *args, **kwargs):
-        """Override save to ensure data validation."""
-        self.clean()
-        super().save(*args, **kwargs)
-
     def verify_email(self):
-        """
-        Mark user's email as verified.
-
-        Raises:
-            ValidationException: If user is already verified
-        """
-        if self.is_email_verified:
-            raise ValidationException(
-                detail=_("Email is already verified"), extra_data={"email": self.email}
-            )
-
+        """Mark user's email as verified."""
         self.is_email_verified = True
         self.save(update_fields=["is_email_verified"])
-
-    def require_email_verification(self):
-        """
-        Check if email verification is required.
-
-        Raises:
-            EmailNotVerifiedException: If email is not verified
-        """
-        if not self.is_email_verified:
-            raise EmailNotVerifiedException(
-                detail=_("Email verification required"),
-                extra_data={"email": self.email},
-            )
-
-    def has_role(self, role):
-        """
-        Check if user has specific role.
-
-        Args:
-            role: UserRole enum value
-
-        Returns:
-            bool: True if user has the role
-        """
-        return self.role == role
-
-    def is_admin(self):
-        """Check if user is admin or superadmin."""
-        return self.role in [UserRole.ADMIN, UserRole.SUPERADMIN]
-
-    def is_moderator_or_above(self):
-        """Check if user is moderator, admin, or superadmin."""
-        return self.role in [UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPERADMIN]
 
     @property
     def full_name(self):
@@ -215,22 +127,6 @@ class User(AbstractUser, TimeStampedMixin):
     def display_name(self):
         """Return display name (full name or email)."""
         return self.full_name or self.email
-
-    @property
-    def age(self):
-        """Calculate and return user's age."""
-        if not self.date_of_birth:
-            return None
-
-        today = timezone.now().date()
-        return (
-            today.year
-            - self.date_of_birth.year
-            - (
-                (today.month, today.day)
-                < (self.date_of_birth.month, self.date_of_birth.day)
-            )
-        )
 
     @property
     def avatar_url(self):
@@ -249,28 +145,10 @@ class User(AbstractUser, TimeStampedMixin):
             f"&background=6366f1&color=fff&size=200"
         )
 
-    def get_active_sessions(self):
-        """Get all active sessions for this user."""
-        # To be implemented with UserSession model
-        return []
-
-    def invalidate_all_sessions(self, reason="security"):
-        """Invalidate all user sessions."""
-        # To be implemented with UserSession model
-        pass
-
-
-# ================================================================
-# USER PROFILE MODEL
-# ================================================================
-
 
 class UserProfile(BaseModelMixin):
     """
     Extended user profile information.
-
-    Uses:
-    - BaseModelMixin: TimeStamped + Active + BaseManager functionality
     """
 
     user = models.OneToOneField(
@@ -334,12 +212,6 @@ class UserProfile(BaseModelMixin):
         help_text=_("UI theme preference."),
     )
 
-    profile_views = models.PositiveIntegerField(
-        _("profile views"),
-        default=0,
-        help_text=_("Number of times profile has been viewed."),
-    )
-
     # Custom manager
     objects = UserProfileManager()
 
@@ -350,61 +222,7 @@ class UserProfile(BaseModelMixin):
         indexes = [
             models.Index(fields=["user"]),
             models.Index(fields=["privacy_level"]),
-            models.Index(fields=["preferred_language"]),
         ]
 
     def __str__(self):
         return f"{self.user.email} Profile"
-
-    def clean(self):
-        """Custom validation for UserProfile"""
-        super().clean()
-
-        # Validate bio length if provided
-        if self.bio and len(self.bio.strip()) < 10:
-            raise ValidationError(
-                {"bio": _("Biography must be at least 10 characters long.")}
-            )
-
-        # Clean location
-        if self.location:
-            self.location = self.location.strip().title()
-
-    def save(self, *args, **kwargs):
-        """Override save to ensure validation."""
-        self.clean()
-        super().save(*args, **kwargs)
-
-    def get_notification_setting(self, setting_name, default=True):
-        """
-        Get specific notification setting.
-
-        Args:
-            setting_name: Name of the notification setting
-            default: Default value if setting not found
-
-        Returns:
-            Setting value or default
-        """
-        return self.notification_preferences.get(setting_name, default)
-
-    def update_notification_setting(self, setting_name, value):
-        """
-        Update specific notification setting.
-
-        Args:
-            setting_name: Name of the notification setting
-            value: New value for the setting
-        """
-        self.notification_preferences[setting_name] = value
-        self.save(update_fields=["notification_preferences"])
-
-    def increment_profile_views(self):
-        """Increment profile view count."""
-        self.profile_views += 1
-        self.save(update_fields=["profile_views"])
-
-    @property
-    def is_public(self):
-        """Check if profile is public."""
-        return self.privacy_level == PrivacyLevel.PUBLIC
