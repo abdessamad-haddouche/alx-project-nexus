@@ -48,22 +48,48 @@ class UserSessionManager(models.Manager):
     ):
         """Create a new user session."""
         # Simple device type detection
-        device_type = (
-            DeviceType.MOBILE
-            if any(
-                mobile in user_agent.lower()
-                for mobile in ["mobile", "android", "iphone", "ipad"]
-            )
-            else DeviceType.DESKTOP
-        )
+        device_type = DeviceType.DESKTOP  # Default value
 
+        if "device_type" not in extra_fields:
+            # Device detection logic
+            if user_agent:
+                user_agent_lower = user_agent.lower()
+
+                # Check for tablet first (more specific)
+                if any(
+                    tablet in user_agent_lower
+                    for tablet in ["ipad", "tablet", "kindle"]
+                ):
+                    device_type = DeviceType.TABLET
+                # Check for mobile
+                elif any(
+                    mobile in user_agent_lower
+                    for mobile in [
+                        "mobile",
+                        "android",
+                        "iphone",
+                        "ipod",
+                        "blackberry",
+                        "windows phone",
+                        "nokia",
+                        "opera mini",
+                        "mobile safari",
+                    ]
+                ):
+                    device_type = DeviceType.MOBILE
+                # Desktop is already set as default
+            else:
+                device_type = DeviceType.UNKNOWN
+
+            extra_fields["device_type"] = device_type
+
+        # Create the session with all fields
         session = self.create(
             user=user,
             ip_address=ip_address,
             user_agent=user_agent,
             login_method=login_method,
-            device_type=device_type,
-            **extra_fields,
+            **extra_fields,  # This now includes device_type
         )
 
         return session
