@@ -276,11 +276,63 @@ class ExternalServiceException(ServerErrorException):
     default_code = "external_service_error"
 
 
+# TMDB-specific exceptions
 class TMDbAPIException(ExternalServiceException):
     """Raised when TMDb API calls fail."""
 
     default_detail = _("TMDb service is currently unavailable.")
     default_code = "tmdb_service_error"
+
+
+class TMDbRateLimitException(ExternalServiceException):
+    """Raised when TMDb API rate limit is exceeded."""
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    default_detail = _("TMDb API rate limit exceeded. Please try again later.")
+    default_code = "tmdb_rate_limit_exceeded"
+
+    def __init__(self, retry_after: Optional[int] = None, **kwargs):
+        """
+        Initialize with retry-after information.
+
+        Args:
+            retry_after: Seconds until rate limit resets
+        """
+        if retry_after:
+            kwargs["extra_data"] = {"retry_after": retry_after}
+        super().__init__(**kwargs)
+
+
+class TMDbNotFountException(ExternalServiceException):
+    """Raised when TMDb resource is not found."""
+
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = _("Resource not found in TMDb database.")
+    default_code = "tmdb_resource_not_found"
+
+
+class TMDbConnectionException(ExternalServiceException):
+    """Raised when unable to connect to TMDb API."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = _("Unable to connect to TMDb service.")
+    default_code = "tmdb_connection_error"
+
+
+class TMDbDataException(ExternalServiceException):
+    """Raised when TMDb returns invalid or corrupted data."""
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    default_detail = _("Invalid data received from TMDb.")
+    default_code = "tmdb_data_error"
+
+
+class TMDbAuthenticationException(ExternalServiceException):
+    """Raised when TMDb API authentication fails."""
+
+    status_code = status.HTTP_401_UNAUTHORIZED
+    default_detail = _("TMDb API authentication failed.")
+    default_code = "tmdb_auth_error"
 
 
 class DatabaseException(ServerErrorException):

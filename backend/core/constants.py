@@ -88,6 +88,34 @@ class Timezone(models.TextChoices):
     AUSTRALIA_SYDNEY = "Australia/Sydney", _("Sydney")
 
 
+class Region(models.TextChoices):
+    """Supported country/region codes (ISO 3166-1 alpha-2)."""
+
+    MA = "MA", _("Morocco")
+    EG = "EG", _("Egypt")
+    NG = "NG", _("Nigeria")
+    ZA = "ZA", _("South Africa")
+    GH = "GH", _("Ghana")
+    ET = "ET", _("Ethiopia")
+    US = "US", _("United States")
+    GB = "GB", _("United Kingdom")
+    FR = "FR", _("France")
+    DE = "DE", _("Germany")
+    JP = "JP", _("Japan")
+    IN = "IN", _("India")
+    AR = "AR", _("Argentina")
+    SA = "SA", _("Saudi Arabia")
+    AE = "AE", _("United Arab Emirates")
+    CA = "CA", _("Canada")
+    AU = "AU", _("Australia")
+    CN = "CN", _("China")
+    KR = "KR", _("South Korea")
+    RU = "RU", _("Russia")
+    ES = "ES", _("Spain")
+    IT = "IT", _("Italy")
+    BR = "BR", _("Brazil")
+
+
 # ================================================================
 # MOVIE CATALOG & CONTENT
 # ================================================================
@@ -194,6 +222,25 @@ class SessionStatus(models.TextChoices):
     EXPIRED = "expired", _("Expired")
     TERMINATED = "terminated", _("Terminated")
     SUSPENDED = "suspended", _("Suspended")
+
+
+# ================================================================
+# TMDB API
+# ================================================================
+#  The allowed time window values for TMDb trending API endpoints.
+class TMDBTimeWindow(models.TextChoices):
+    DAY = "day", _("Day")
+    WEEK = "week", _("Week")
+
+
+class TMDBImageSize(models.TextChoices):
+    W92 = "w92", "92 pixels wide"
+    W154 = "w154", "154 pixels wide"
+    W185 = "w185", "185 pixels wide"
+    W342 = "w342", "342 pixels wide"
+    W500 = "w500", "500 pixels wide"
+    W780 = "w780", "780 pixels wide"
+    ORIGINAL = "original", "Original size"
 
 
 # ================================================================
@@ -311,6 +358,20 @@ class DateTimeFormats:
     ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
     HUMAN_DATE = "%B %d, %Y"
     HUMAN_DATETIME = "%B %d, %Y at %I:%M %p"
+
+
+# ================================================================
+# DATE & TIME FORMATS
+# ================================================================
+
+
+class TMDbSyncStatus(models.TextChoices):
+    """TMDb synchronization status options."""
+
+    PENDING = "pending", _("Pending")
+    SUCCESS = "success", _("Success")
+    FAILED = "failed", _("Failed")
+    PARTIAL = "partial", _("Partial")
 
 
 # ================================================================
