@@ -12,11 +12,14 @@ help:
 	@echo "  run            Run development server"
 	@echo "  db-start       Start PostgreSQL service"
 	@echo "  db-stop        Stop PostgreSQL service"
+	@echo "  db-access      Access PostgreSQL database with credentials"
 	@echo "  shell          Open Django shell"
 	@echo "  setup-frontend Setup React frontend (optional)"
 	@echo "  clean          Clean cache and temporary files"
 	@echo "  tree-clean     Show directory structure (optional)"
-	@echo "  db-access      Access PostgreSQL database with credentials"
+	@echo "  redis-start    Start Redis service"
+	@echo "  redis-stop     Stop Redis service"
+	@echo "  redis-status   Check Redis service status"
 
 install:
 	pip install -r backend/requirements/production.txt
@@ -58,6 +61,9 @@ setup-frontend:
 	npx create-react-app frontend --template typescript
 	@echo "Frontend React app created in frontend/ directory"
 
+db-access:
+	psql -h localhost -p 5432 -U movie_nexus_user -d movie_nexus_dev
+
 clean:
 	find . -type d -name __pycache__ -delete
 	find . -type f -name "*.pyc" -delete
@@ -68,5 +74,11 @@ clean:
 tree-clean:
 	tree -I '*[0-9]*|__pycache__|.venv|planning'
 
-db-access:
-	psql -h localhost -p 5432 -U movie_nexus_user -d movie_nexus_dev
+redis-start:
+	sudo service redis-server start
+
+redis-stop:
+	sudo service redis-server stop
+
+redis-status:
+	sudo service redis-server status
