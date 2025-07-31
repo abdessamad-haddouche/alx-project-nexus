@@ -182,6 +182,58 @@ DATABASES = {
     }
 }
 
+
+# ================================================================
+# CACHE CONFIGURATION (Redis)
+# ================================================================
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": config("REDIS_URL", default="redis://127.0.0.1:6379/1"),
+        "TIMEOUT": 3600,  # 1 hour default timeout
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "max_connections": 50,
+                "retry_on_timeout": True,
+            },
+            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+        },
+        "KEY_PREFIX": "movie_nexus",  # Prefix for all cache keys
+        "VERSION": 1,
+    },
+    # Separate cache for sessions
+    "sessions": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": config("REDIS_URL", default="redis://127.0.0.1:6379/2"),
+        "TIMEOUT": 86400,  # 24 hours for sessions
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "max_connections": 20,
+            },
+        },
+        "KEY_PREFIX": "movie_nexus_session",
+    },
+}
+
+# Use Redis for session storage
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "sessions"
+SESSION_COOKIE_AGE = 86400  # 24 hours
+
+# Cache settings for different environments
+CACHE_TTL = {
+    "DEFAULT": 3600,  # 1 hour
+    "SHORT": 300,  # 5 minutes
+    "MEDIUM": 1800,  # 30 minutes
+    "LONG": 86400,  # 24 hours
+    "WEEK": 604800,  # 1 week
+}
+
+
 # ================================================================
 # PASSWORD VALIDATION
 # ================================================================
@@ -247,6 +299,77 @@ EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
+
+
+# ================================================================
+# TMDB API CONFIGURATION
+# ================================================================
+TMDB_API_KEY = config("TMDB_API_KEY", default="")
+TMDB_READ_ACCESS_TOKEN = config("TMDB_READ_ACCESS_TOKEN", default="")
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
+TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/"
+
+# TMDb API Settings
+TMDB_SETTINGS = {
+    "API_KEY": TMDB_API_KEY,
+    "READ_ACCESS_TOKEN": TMDB_READ_ACCESS_TOKEN,
+    "BASE_URL": TMDB_BASE_URL,
+    "IMAGE_BASE_URL": TMDB_IMAGE_BASE_URL,
+    "RATE_LIMIT": {
+        "REQUESTS_PER_SECOND": 4,  # 40 requests per 10 seconds = 4/sec
+        "BURST_SIZE": 10,  # Allow burst of 10 requests
+        "RETRY_ATTEMPTS": 3,
+        "RETRY_DELAY": 1,  # seconds
+        "BACKOFF_FACTOR": 2,  # exponential backoff
+    },
+    "CACHE_SETTINGS": {
+        "MOVIE_DETAILS_TTL": CACHE_TTL["LONG"],  # 24 hours
+        "SEARCH_RESULTS_TTL": CACHE_TTL["MEDIUM"],  # 30 minutes
+        "POPULAR_MOVIES_TTL": CACHE_TTL["MEDIUM"],  # 30 minutes
+        "TRENDING_MOVIES_TTL": CACHE_TTL["SHORT"],  # 5 minutes
+        "GENRE_LIST_TTL": CACHE_TTL["WEEK"],  # 1 week
+    },
+    "IMAGE_SIZES": {
+        "POSTER": ["w92", "w154", "w185", "w342", "w500", "w780", "original"],
+        "BACKDROP": ["w300", "w780", "w1280", "original"],
+        "PROFILE": ["w45", "w185", "h632", "original"],
+    },
+    "IMAGE_CONFIGS": {
+        "LIST_VIEW": {
+            "poster_size": "w342",
+            "backdrop_size": "w780",
+            "profile_size": "w185",
+        },
+        "DETAIL_VIEW": {
+            "poster_size": "w500",
+            "backdrop_size": "w1280",
+            "profile_size": "w185",
+        },
+        "MOBILE_VIEW": {
+            "poster_size": "w185",
+            "backdrop_size": "w780",
+            "profile_size": "w185",
+        },
+        "THUMBNAIL_VIEW": {
+            "poster_size": "w154",
+            "backdrop_size": "w300",
+            "profile_size": "w45",
+        },
+    },
+    "DEFAULT_LANGUAGE": "en-US",
+    "DEFAULT_REGION": "US",
+    "TIMEOUT": 10,  # Request timeout in seconds
+}
+
+# Validate TMDb configuration
+if not TMDB_API_KEY and not TMDB_READ_ACCESS_TOKEN:
+    import warnings
+
+    warnings.warn(
+        "TMDb API credentials not configured. Movie features will be limited.",
+        UserWarning,
+    )
+
 
 # ================================================================
 # SITE CONFIGURATION - ADD THIS FOR EMAIL TEMPLATES
