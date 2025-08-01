@@ -4,12 +4,14 @@ Each mixin provides a specific piece of functionality that can be composed toget
 """
 
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from ..constants import TMDbSyncStatus
 from .managers import (
     ActiveManager,
     AuditableManager,
@@ -310,6 +312,167 @@ class MetadataMixin(models.Model):
 
 
 # ================================================================
+# TMDB INTEGRATION MIXINS
+# ================================================================
+
+
+class TMDbMixin(models.Model):
+    """
+    Mixin for models that sync with TMDb API.
+    Provides TMDb ID tracking and synchronization metadata.
+    """
+
+    tmdb_id = models.PositiveIntegerField(
+        _("TMDb ID"),
+        unique=True,
+        db_index=True,
+        help_text=_("The Movie Database unique identifier"),
+    )
+
+    last_synced = models.DateTimeField(
+        _("last synced"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_("Last time data was synchronized with TMDb"),
+    )
+
+    sync_status = models.CharField(
+        _("sync status"),
+        max_length=20,
+        choices=TMDbSyncStatus.choices,
+        default=TMDbSyncStatus.PENDING,
+        db_index=True,
+        help_text=_("Status of last TMDb synchronization"),
+    )
+
+    sync_retries = models.PositiveSmallIntegerField(
+        _("sync retries"),
+        default=0,
+        help_text=_("Number of sync retry attempts"),
+    )
+
+    class Meta:
+        abstract = True
+        indexes = [
+            models.Index(fields=["tmdb_id"]),
+            models.Index(fields=["last_synced"]),
+            models.Index(fields=["sync_status"]),
+            models.Index(fields=["tmdb_id", "sync_status"]),
+        ]
+
+    def mark_sync_success(self):
+        """Mark synchronization as successful."""
+        self.sync_status = TMDbSyncStatus.SUCCESS
+        self.last_synced = timezone.now()
+        self.sync_retries = 0
+        self.save(update_fields=["sync_status", "last_synced", "sync_retries"])
+
+    def mark_sync_failed(self):
+        """Mark synchronization as failed and increment retries."""
+        self.sync_status = TMDbSyncStatus.FAILED
+        self.sync_retries += 1
+        self.save(update_fields=["sync_status", "sync_retries"])
+
+    def needs_sync(self, hours=24):
+        """
+        Check if model needs synchronization.
+
+        Args:
+            hours: Hours since last sync to consider stale
+
+        Returns:
+            bool: True if sync is needed
+        """
+        if not self.last_synced:
+            return True
+
+        if self.sync_status == TMDbSyncStatus.FAILED:
+            return True
+
+        stale_threshold = timezone.now() - timedelta(hours=hours)
+        return self.last_synced < stale_threshold
+
+    @property
+    def sync_age_hours(self):
+        """Get age of last sync in hours."""
+        if not self.last_synced:
+            return None
+        return (timezone.now() - self.last_synced).total_seconds() / 3600
+
+
+class PopularityMixin(models.Model):
+    """
+    Mixin for models with popularity and rating data.
+    Used for movies, TV shows, and people.
+    """
+
+    popularity = models.FloatField(
+        _("popularity"),
+        default=0.0,
+        db_index=True,
+        help_text=_("TMDb popularity score"),
+    )
+
+    vote_average = models.FloatField(
+        _("vote average"),
+        default=0.0,
+        db_index=True,
+        help_text=_("Average user rating (0-10)"),
+    )
+
+    vote_count = models.PositiveIntegerField(
+        _("vote count"),
+        default=0,
+        db_index=True,
+        help_text=_("Total number of votes"),
+    )
+
+    class Meta:
+        abstract = True
+        indexes = [
+            models.Index(fields=["popularity"]),
+            models.Index(fields=["vote_average"]),
+            models.Index(fields=["vote_count"]),
+            models.Index(fields=["popularity", "vote_average"]),
+        ]
+
+    @property
+    def is_popular(self):
+        """Check if item is considered popular (popularity > 50)."""
+        return self.popularity > 50.0
+
+    @property
+    def is_highly_rated(self):
+        """Check if item is highly rated (average > 7.0 with min votes)."""
+        return self.vote_average > 7.0 and self.vote_count >= 100
+
+    @property
+    def rating_stars(self):
+        """Convert 0-10 rating to 0-5 stars."""
+        return round(self.vote_average / 2, 1)
+
+
+class ReleaseMixin(models.Model):
+    """Mixin for release date information."""
+
+    release_date = models.DateField(
+        _("release date"),
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=_("Official release date"),
+    )
+
+    class Meta:
+        abstract = True
+
+    @property
+    def release_year(self):
+        return self.release_date.year if self.release_date else None
+
+
+# ================================================================
 # COMPOSITE MIXINS (MOST COMMONLY USED)
 # ================================================================
 
@@ -337,3 +500,23 @@ class FullAuditMixin(BaseModelMixin, AuditableMixin, SoftDeleteMixin):
     class Meta:
         abstract = True
         ordering = ["-created_at"]
+
+
+class TMDbContentMixin(TMDbMixin, PopularityMixin, ReleaseMixin):
+    """
+    Composite mixin for TMDb content (movies, TV shows).
+    Combines sync, popularity, and release functionality.
+    """
+
+    class Meta:
+        abstract = True
+
+
+class TMDbPersonMixin(TMDbMixin, PopularityMixin):
+    """
+    Composite mixin for TMDb people (actors, directors).
+    Combines sync and popularity (no release date for people).
+    """
+
+    class Meta:
+        abstract = True
