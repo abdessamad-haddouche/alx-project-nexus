@@ -240,33 +240,54 @@ class TMDBImageSize(models.TextChoices):
     W342 = "w342", "342 pixels wide"
     W500 = "w500", "500 pixels wide"
     W780 = "w780", "780 pixels wide"
+    W1280 = "w1280", "1280 pixels wide"
     ORIGINAL = "original", "Original size"
 
 
 # ================================================================
-# RECOMMENDATIONS & ALGORITHMS
+# MOVIE RECOMEMNDATION
 # ================================================================
 
 
-class RecommendationContext(models.TextChoices):
-    """Context where recommendations are shown."""
-
-    HOME_FEED = "home_feed", _("Home Feed")
-    MOVIE_DETAIL = "movie_detail", _("Movie Detail Page")
-    SEARCH_RESULTS = "search_results", _("Search Results")
-    GENRE_BROWSE = "genre_browse", _("Genre Browse")
-    USER_PROFILE = "user_profile", _("User Profile")
-    EMAIL_DIGEST = "email_digest", _("Email Digest")
+# ================================================================
+# MOVIE RECOMMENDATION CONSTANTS
+# ================================================================
 
 
-class RecommendationAlgorithm(models.TextChoices):
-    """Types of recommendation algorithms."""
+class RecommendationType(models.TextChoices):
+    """Types of movie recommendations and relationships."""
 
+    # TMDb-based recommendations
+    TMDB_RECOMMENDATION = "tmdb_recommendation", _("TMDb Recommendation")
+    TMDB_SIMILAR = "tmdb_similar", _("TMDb Similar Movies")
+
+    # Algorithm-based recommendations (future)
+    GENRE_BASED = "genre_based", _("Genre Based")
     COLLABORATIVE = "collaborative", _("Collaborative Filtering")
-    CONTENT_BASED = "content_based", _("Content-Based")
+    CONTENT_BASED = "content_based", _("Content Based")
+    POPULARITY_BASED = "popularity_based", _("Popularity Based")
+
+    # User behavior-based (future)
+    USER_SIMILAR = "user_similar", _("Similar User Preferences")
+    TRENDING_SIMILAR = "trending_similar", _("Trending in Similar Categories")
+
+
+class RecommendationSource(models.TextChoices):
+    """Source of recommendation data."""
+
+    TMDB = "tmdb", _("The Movie Database")
+    INTERNAL = "internal", _("Internal Algorithm")
+    USER_GENERATED = "user_generated", _("User Generated")
     HYBRID = "hybrid", _("Hybrid Algorithm")
-    POPULARITY = "popularity", _("Popularity-Based")
-    TRENDING = "trending", _("Trending Content")
+
+
+class RecommendationConfidence(models.TextChoices):
+    """Recommendation confidence levels for display."""
+
+    LOW = "low", _("Low Confidence")
+    MEDIUM = "medium", _("Medium Confidence")
+    HIGH = "high", _("High Confidence")
+    VERY_HIGH = "very_high", _("Very High Confidence")
 
 
 # ================================================================
