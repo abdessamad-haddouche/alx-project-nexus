@@ -62,11 +62,11 @@ class MovieGenre(BaseModelMixin):
     def __repr__(self):
         return f"<MovieGenre: {self.movie.tmdb_id} → {self.genre.name}>"
 
-    def save(self, *args, **kwargs):
-        """Override save to ensure only one primary genre per movie."""
-        if self.is_primary:
-            # Remove primary flag from other genres for this movie
-            MovieGenre.objects.filter(movie=self.movie, is_primary=True).exclude(
-                id=self.id
-            ).update(is_primary=False)
-        super().save(*args, **kwargs)
+    # def save(self, *args, **kwargs):
+    #     """Override save to ensure only one primary genre per movie."""
+    #     if self.is_primary:
+    #         # Remove primary flag from other genres for this movie
+    #         MovieGenre.objects.filter(movie=self.movie, is_primary=True).exclude(
+    #             id=self.id
+    #         ).update(is_primary=False)
+    #     super().save(*args, **kwargs)

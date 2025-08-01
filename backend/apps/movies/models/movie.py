@@ -239,7 +239,13 @@ class Movie(TMDbContentMixin, BaseModelMixin, MetadataMixin):
     @property
     def primary_genre(self):
         """Get the primary genre (first in the list)."""
-        return self.genres.first()
+        try:
+            primary_mg = self.movie_genres.filter(
+                is_primary=True, is_active=True
+            ).first()
+            return primary_mg.genre if primary_mg else None
+        except:
+            return None
 
     @property
     def genre_names(self):
@@ -290,8 +296,7 @@ class Movie(TMDbContentMixin, BaseModelMixin, MetadataMixin):
     def get_tmdb_similar(self, limit=10):
         """Get TMDb similar movies."""
         return self.related_movies.filter(
-            movie_recommendations_from__recommendation_type=
-                RecommendationType.TMDB_SIMILAR,
+            movie_recommendations_from__recommendation_type=RecommendationType.TMDB_SIMILAR,
             is_active=True,
         ).order_by(
             "-movie_recommendations_from__confidence_score",  # Nulls last

@@ -6,12 +6,12 @@ from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
-from core.mixins.models import BaseModelMixin
+from core.mixins.models import ActiveMixin, TimeStampedMixin
 
 from ..managers import GenreManager
 
 
-class Genre(BaseModelMixin):
+class Genre(TimeStampedMixin, ActiveMixin):
     """
     Movie genre model with TMDb integration.
     """
@@ -31,8 +31,9 @@ class Genre(BaseModelMixin):
         _("slug"), max_length=50, unique=True, help_text=_("URL-friendly genre name")
     )
 
-    # Custom manager
-    objects = GenreManager()
+    # Dual manager setup
+    objects = models.Manager()
+    active_objects = GenreManager()
 
     class Meta:
         db_table = "movies_genre"
@@ -43,6 +44,7 @@ class Genre(BaseModelMixin):
             models.Index(fields=["tmdb_id"]),
             models.Index(fields=["name"]),
             models.Index(fields=["slug"]),
+            models.Index(fields=["is_active"]),
         ]
 
     def __str__(self):
@@ -73,9 +75,15 @@ class Genre(BaseModelMixin):
         )[:limit]
 
     def save(self, *args, **kwargs):
-        """Override save to auto-generate slug."""
+        """Override save to auto-generate slug and ensure proper defaults."""
+        # Ensure new genres are active by default
+        if self._state.adding and self.is_active is None:
+            self.is_active = True
+
+        # Auto-generate slug if not provided
         if not self.slug and self.name:
             from django.utils.text import slugify
 
             self.slug = slugify(self.name)
+
         super().save(*args, **kwargs)
