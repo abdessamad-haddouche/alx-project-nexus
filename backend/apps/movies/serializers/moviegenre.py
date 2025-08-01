@@ -16,7 +16,6 @@ class MovieGenreListSerializer(TimestampMixin, serializers.ModelSerializer):
     MovieGenre serializer for list views and relationship display.
     """
 
-    # Use simple nested serializers to avoid circular imports
     movie = serializers.SerializerMethodField()
     genre = serializers.SerializerMethodField()
 

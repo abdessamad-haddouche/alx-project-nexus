@@ -17,7 +17,6 @@ class MovieRecommendationListSerializer(TimestampMixin, serializers.ModelSeriali
     MovieRecommendation serializer for list views and relationship display.
     """
 
-    # Use inline methods to avoid circular imports
     source_movie = serializers.SerializerMethodField()
     recommended_movie = serializers.SerializerMethodField()
     confidence_percentage = serializers.ReadOnlyField()
