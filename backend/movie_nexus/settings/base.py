@@ -53,6 +53,8 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
+    "django_extensions",
+    "drf_spectacular",
 ]
 
 # Local apps
@@ -113,6 +115,7 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # ================================================================
@@ -373,7 +376,75 @@ if not TMDB_API_KEY and not TMDB_READ_ACCESS_TOKEN:
 
 
 # ================================================================
-# SITE CONFIGURATION - ADD THIS FOR EMAIL TEMPLATES
+# API DOCUMENTATION CONFIGURATION (DRF-Spectacular)
+# ================================================================
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Movie Nexus API",
+    "DESCRIPTION": """
+    A comprehensive movie recommendation platform API built with Django REST Framework.
+
+    Features:
+    - Movie catalog management with TMDb integration
+    - Advanced search and filtering
+    - Personalized recommendations
+    - User authentication with JWT
+    - Genre-based movie discovery
+    - Admin operations for content management
+
+    """,
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "CONTACT": {
+        "name": "Abdessamad Haddouche",
+        "email": "abdessamad.hadd@gmail.com",
+    },
+    "LICENSE": {
+        "name": "MIT License",
+    },
+    # API Configuration
+    "COMPONENT_SPLIT_REQUEST": True,
+    "COMPONENT_NO_READ_ONLY_REQUIRED": True,
+    # Authentication
+    "SERVE_AUTHENTICATION": [
+        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAuthenticated"],
+    # Schema customization
+    "SCHEMA_PATH_PREFIX": "/api/v1/",
+    "SCHEMA_PATH_PREFIX_TRIM": True,
+    "TAGS": [
+        {
+            "name": "Authentication",
+            "description": "User authentication and authorization",
+        },
+        {"name": "Movies - Public", "description": "Public movie browsing and search"},
+        {"name": "Movies - Admin", "description": "Administrative movie management"},
+        {"name": "Genres", "description": "Movie genre operations"},
+        {"name": "Recommendations", "description": "Movie recommendation engine"},
+        {"name": "Discovery", "description": "Movie discovery and trending"},
+        {"name": "External APIs", "description": "TMDb integration endpoints"},
+    ],
+    # UI Customization
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": False,
+        "displayRequestDuration": True,
+        "filter": True,
+        "tryItOutEnabled": True,
+    },
+    "REDOC_UI_SETTINGS": {
+        "hideDownloadButton": False,
+        "theme": {"colors": {"primary": {"main": "#1976d2"}}},
+    },
+    # Security
+    "SERVE_PUBLIC": True,
+    "DISABLE_ERRORS_AND_WARNINGS": False,
+}
+
+# ================================================================
+# SITE CONFIGURATION
 # ================================================================
 SITE_NAME = config("SITE_NAME", default="Movie Nexus")
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
