@@ -8,6 +8,10 @@ from django.urls import path
 
 # Import views from authentication app
 from apps.authentication.views import (
+    AdminCreateView,
+    AdminListView,
+    AdminPromoteView,
+    AdminRevokeView,
     CurrentSessionView,
     EmailVerificationView,
     PasswordChangeView,
@@ -15,6 +19,7 @@ from apps.authentication.views import (
     PasswordResetRequestView,
     ResendEmailVerificationView,
     SessionTerminateView,
+    SuperAdminCreateView,
     TokenBlacklistView,
     TokenInfoView,
     TokenRefreshView,
@@ -80,5 +85,15 @@ urlpatterns = [
     path("sessions/current/", CurrentSessionView.as_view(), name="current-session"),
     path(
         "sessions/terminate/", SessionTerminateView.as_view(), name="session-terminate"
+    ),
+    # ================================================================
+    # ADMIN MANAGEMENT (SUPERUSER ONLY)
+    # ================================================================
+    path("admin/create/", AdminCreateView.as_view(), name="admin-create"),
+    path("admin/promote/", AdminPromoteView.as_view(), name="admin-promote"),
+    path("admin/revoke/<int:user_id>/", AdminRevokeView.as_view(), name="admin-revoke"),
+    path("admin/list/", AdminListView.as_view(), name="admin-list"),
+    path(
+        "superadmin/create/", SuperAdminCreateView.as_view(), name="superadmin-create"
     ),
 ]

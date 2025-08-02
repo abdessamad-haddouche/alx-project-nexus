@@ -2,6 +2,14 @@
 Authentication Services Base Module
 """
 
+from .admin_service import (
+    AdminService,
+    create_admin_user,
+    create_superadmin_user,
+    promote_user_to_admin,
+    revoke_admin_privileges,
+)
+
 # Authentication Service
 from .auth_service import (
     AuthenticationService,
@@ -58,6 +66,8 @@ __all__ = [
     "OAuthService",
     "TokenService",
     "SessionService",
+    # Admin Services
+    "AdminService",
     # User Management Services
     "authenticate_user",
     "generate_tokens",
@@ -78,6 +88,10 @@ __all__ = [
     "terminate_user_session",
     "terminate_all_sessions",
     "get_active_sessions",
+    "create_admin_user",
+    "create_superadmin_user",
+    "promote_user_to_admin",
+    "revoke_admin_privileges",
 ]
 
 

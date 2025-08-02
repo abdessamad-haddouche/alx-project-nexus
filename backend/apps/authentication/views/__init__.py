@@ -3,6 +3,14 @@ Authentication Views Module
 Exports all authentication views for easy importing.
 """
 
+from .admin_views import (
+    AdminCreateView,
+    AdminListView,
+    AdminPromoteView,
+    AdminRevokeView,
+    SuperAdminCreateView,
+)
+
 # Core Authentication Views
 from .auth_views import UserLoginView, UserLogoutView, UserRegistrationView
 
@@ -65,4 +73,9 @@ __all__ = [
     "TokenInfoView",
     "TokenRevokeAllView",
     "TokenStatsView",
+    "AdminCreateView",
+    "AdminPromoteView",
+    "AdminRevokeView",
+    "AdminListView",
+    "SuperAdminCreateView",
 ]
