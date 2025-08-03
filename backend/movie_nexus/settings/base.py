@@ -448,3 +448,65 @@ SPECTACULAR_SETTINGS = {
 # ================================================================
 SITE_NAME = config("SITE_NAME", default="Movie Nexus")
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
+
+# ================================================================
+# CELERY CONFIGURATION
+# ================================================================
+
+# Celery Broker (using Redis)
+CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://127.0.0.1:6379/3")
+CELERY_RESULT_BACKEND = config(
+    "CELERY_RESULT_BACKEND", default="redis://127.0.0.1:6379/4"
+)
+
+# Celery Configuration
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# Task routing and queue configuration
+CELERY_TASK_ROUTES = {
+    "apps.movies.tasks.sync_movie_details": {"queue": "movies"},
+    "apps.movies.tasks.seed_popular_movies": {"queue": "seeding"},
+    "apps.movies.tasks.sync_search_results": {"queue": "movies"},
+    "apps.movies.tasks.refresh_stale_movies": {"queue": "maintenance"},
+}
+
+# Default queue configuration
+CELERY_TASK_DEFAULT_QUEUE = "default"
+
+# Task execution configuration
+CELERY_TASK_ALWAYS_EAGER = config(
+    "CELERY_TASK_ALWAYS_EAGER", default=True, cast=bool
+)  # TRUE = No background tasks
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_STORE_EAGER_RESULT = True
+
+# Rate limiting (for when i enable Celery)
+CELERY_TASK_ANNOTATIONS = {
+    "apps.movies.tasks.sync_movie_details": {"rate_limit": "10/m"},
+    "apps.movies.tasks.sync_search_results": {"rate_limit": "5/m"},
+}
+
+# Worker configuration (for when i enable Celery)
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+
+# Beat scheduler configuration (for periodic tasks)
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# Monitoring
+CELERY_SEND_TASK_EVENTS = True
+CELERY_TASK_SEND_SENT_EVENT = True
+
+# ================================================================
+# CELERY TOGGLE SETTINGS
+# ================================================================
+
+# This determines if background tasks run immediately (True) or in background (False)
+USE_CELERY_BACKGROUND_TASKS = config(
+    "USE_CELERY_BACKGROUND_TASKS", default=False, cast=bool
+)
