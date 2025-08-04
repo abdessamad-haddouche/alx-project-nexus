@@ -35,17 +35,85 @@ logger = logging.getLogger(__name__)
 class EmailVerificationView(APIView):
     """
     Email verification endpoint using token.
-
-    POST /api/v1/auth/verify-email/
-    {
-        "token": "verification_token_here"
-    }
     """
 
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
     serializer_class = EmailVerificationSerializer
 
+    @extend_schema(
+        operation_id="auth_verify_email",
+        summary="Email Verification",
+        description=(
+            "Verify user email address using verification token. "
+            "The token is typically sent via email during registration. "
+            "Sends welcome email upon successful verification."
+        ),
+        tags=["Authentication"],
+        request=EmailVerificationSerializer,
+        responses={
+            200: {
+                "description": "Email verified successfully",
+                "example": {
+                    "success": True,
+                    "message": "Email verified successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "user": {
+                            "id": 1,
+                            "email": "user@example.com",
+                            "full_name": "John Doe",
+                            "is_email_verified": True,
+                        }
+                    },
+                },
+            },
+            400: {
+                "description": "Invalid or expired token",
+                "example": {
+                    "success": False,
+                    "message": "Invalid or expired verification token",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {
+                            "token": ["This token is invalid or has expired"]
+                        }
+                    },
+                },
+            },
+            429: {"description": "Rate limit exceeded"},
+            500: {
+                "description": "Server error",
+                "example": {
+                    "success": False,
+                    "message": "Email verification failed. Please try again.",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+        },
+        examples=[
+            OpenApiExample(
+                "Email Verification",
+                summary="Verify email with token",
+                description=(
+                    "Standard email verification request with registration token"
+                ),
+                value={
+                    "token": (
+                        "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9."
+                        "eyJ1c2VyX2lkIjoxLCJ0b2tlbl90eXBlIjoidmVyaWZpY2F0aW9uIn0..."
+                    )
+                },
+                value={
+                    "token": (
+                        "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9."
+                        "eyJ1c2VyX2lkIjoxLCJ0b2tlbl90eXBlIjoidmVyaWZpY2F0aW9uIn0..."
+                    )
+                },
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
         """Verify user email with token."""
         try:
@@ -63,9 +131,7 @@ class EmailVerificationView(APIView):
 
             # Verify email using service
             try:
-                result = verify_user_email(
-                    verification_token.token
-                )  # Pass the token string here
+                result = verify_user_email(verification_token.token)
 
                 user = result["user"]
 
@@ -119,56 +185,66 @@ class ResendEmailVerificationView(APIView):
     serializer_class = ResendVerificationSerializer
 
     @extend_schema(
-        operation_id="auth_password_reset_request",
-        summary="Password Reset Request",
+        operation_id="auth_resend_verification",
+        summary="Resend Email Verification",
         description=(
-            "Request password reset for user account. "
-            "If email exists, a reset link will be sent. "
-            "Always returns success for security (doesn't reveal if email exists)."
+            "Resend email verification link to user who hasn't received or lost "
+            "the original verification email."
         ),
         tags=["Authentication"],
-        request=PasswordResetRequestSerializer,
+        request=ResendVerificationSerializer,
         responses={
             200: {
-                "description": "Password reset request processed",
+                "description": "Verification email sent successfully",
                 "example": {
                     "success": True,
-                    "message": (
-                        "If an account exists with this email, password reset "
-                        "instructions have been sent."
-                    ),
+                    "message": "Verification email sent successfully",
                     "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "email": "user@example.com",
+                        "message": "Verification email has been sent",
+                    },
                 },
             },
             400: {
-                "description": "Invalid email format",
+                "description": "Invalid email or already verified",
                 "example": {
                     "success": False,
                     "message": "Invalid email data",
                     "timestamp": "2025-01-15T10:30:00Z",
                     "errors": {
-                        "field_errors": {"email": ["Enter a valid email address"]}
+                        "field_errors": {"email": ["Email is already verified"]}
                     },
                 },
             },
             429: {"description": "Rate limit exceeded"},
             500: {
-                "description": "Server error",
+                "description": "Failed to send email",
                 "example": {
                     "success": False,
-                    "message": "Failed to process password reset request",
+                    "message": "Failed to resend verification email",
                     "timestamp": "2025-01-15T10:30:00Z",
                 },
             },
         },
         examples=[
             OpenApiExample(
-                "Password Reset Request",
-                summary="Request password reset",
-                description="Send password reset instructions to email",
+                "Resend Verification",
+                summary="Resend verification email",
+                description="Request new verification email for unverified account",
                 value={"email": "user@example.com"},
                 request_only=True,
-            )
+            ),
+            OpenApiExample(
+                "Authenticated User Resend",
+                summary="Resend for authenticated user",
+                description=(
+                    "Authenticated users don't need to provide email - "
+                    "uses account email automatically"
+                ),
+                value={},
+                request_only=True,
+            ),
         ],
     )
     def post(self, request):
@@ -310,13 +386,11 @@ class PasswordResetRequestView(APIView):
                     logger.error(f"Failed to send password reset email: {user.email}")
 
             except User.DoesNotExist:
-                # For security, don't reveal if email exists
                 logger.warning(
                     f"Password reset attempt for non-existent email: {email}"
                 )
                 pass
 
-            # Always return success for security (don't reveal if email exists)
             return APIResponse.success(
                 message=_(
                     "If an account exists with this email, password reset"
