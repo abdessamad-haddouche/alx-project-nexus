@@ -104,12 +104,6 @@ class EmailVerificationView(APIView):
                         "eyJ1c2VyX2lkIjoxLCJ0b2tlbl90eXBlIjoidmVyaWZpY2F0aW9uIn0..."
                     )
                 },
-                value={
-                    "token": (
-                        "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9."
-                        "eyJ1c2VyX2lkIjoxLCJ0b2tlbl90eXBlIjoidmVyaWZpY2F0aW9uIn0..."
-                    )
-                },
                 request_only=True,
             )
         ],
