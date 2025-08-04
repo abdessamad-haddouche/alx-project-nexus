@@ -71,7 +71,7 @@ class VerificationToken(BaseModelMixin):
     class Meta:
         verbose_name = _("Token Verification")
         verbose_name_plural = _("Token Verifications")
-        db_table = "auth_email_verification"
+        db_table = "auth_verification"
         indexes = [
             models.Index(fields=["user"]),
             models.Index(fields=["token"]),

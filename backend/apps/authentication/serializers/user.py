@@ -6,6 +6,8 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import VerificationType
@@ -369,3 +371,89 @@ class PasswordResetConfirmSerializer(BaseAuthSerializerMixin, serializers.Serial
                 "full_name": user.full_name,
             },
         }
+
+
+class PasswordChangeSerializer(BaseAuthSerializerMixin, serializers.Serializer):
+    """
+    Password change serializer for authenticated users.
+    """
+
+    current_password = serializers.CharField(
+        write_only=True, help_text="User's current password for verification"
+    )
+    new_password = serializers.CharField(
+        write_only=True, min_length=8, help_text="New password (minimum 8 characters)"
+    )
+    new_password_confirm = serializers.CharField(
+        write_only=True, help_text="Confirmation of new password"
+    )
+
+    def validate_current_password(self, value):
+        """Validate current password is provided."""
+        if not value:
+            raise serializers.ValidationError(_("Current password is required"))
+        return value
+
+    def validate_new_password(self, value):
+        """Validate new password strength."""
+        if not value:
+            raise serializers.ValidationError(_("New password is required"))
+
+        # Use Django's password validation
+        try:
+            validate_password(value, self.context.get("user"))
+        except ValidationError as e:
+            raise serializers.ValidationError(str(e))
+
+        return value
+
+    def validate(self, attrs):
+        """Validate password change data."""
+        attrs = super().validate(attrs)
+
+        current_password = attrs.get("current_password")
+        new_password = attrs.get("new_password")
+        new_password_confirm = attrs.get("new_password_confirm")
+
+        # Check password confirmation
+        if new_password != new_password_confirm:
+            raise serializers.ValidationError(
+                {"new_password_confirm": _("Password confirmation does not match")}
+            )
+
+        # Check current password is correct
+        user = self.context.get("user")
+        if user and not user.check_password(current_password):
+            raise serializers.ValidationError(
+                {"current_password": _("Current password is incorrect")}
+            )
+
+        # Check new password is different from current
+        if current_password == new_password:
+            raise serializers.ValidationError(
+                {
+                    "new_password": _(
+                        "New password must be different from current password"
+                    )
+                }
+            )
+
+        # Remove password_confirm from validated data
+        attrs.pop("new_password_confirm", None)
+        return attrs
+
+    def save(self):
+        """Change user password."""
+        user = self.context["user"]
+        new_password = self.validated_data["new_password"]
+
+        # Change password using service
+        from ..services import change_user_password
+
+        result = change_user_password(
+            user=user,
+            current_password=self.validated_data["current_password"],
+            new_password=new_password,
+        )
+
+        return result

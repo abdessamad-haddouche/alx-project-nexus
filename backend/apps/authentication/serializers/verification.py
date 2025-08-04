@@ -26,7 +26,7 @@ class EmailVerificationSerializer(BaseAuthSerializerMixin, serializers.Serialize
         """Validate verification token."""
         try:
             verification = VerificationToken.objects.get_valid_token(value)
-            if verification.verification_type != VerificationType.REGISTRATION:
+            if verification.verification_type != VerificationType.PASSWORD_RESET:
                 raise serializers.ValidationError(_("Invalid token type"))
             return verification
         except Exception:

@@ -13,6 +13,7 @@ from .session import (
 )
 from .social import GoogleOAuthSerializer, SocialAuthLinkSerializer
 from .user import (
+    PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     UserLoginSerializer,
@@ -28,6 +29,7 @@ __all__ = [
     "UserProfileSerializer",
     "UserRegistrationSerializer",
     "UserLoginSerializer",
+    "PasswordChangeSerializer",
     "PasswordResetRequestSerializer",
     "PasswordResetConfirmSerializer",
     # Social (OAuth) Serializers

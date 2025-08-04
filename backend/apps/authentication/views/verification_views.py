@@ -6,6 +6,7 @@ confirmations.
 
 import logging
 
+from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
@@ -111,17 +112,65 @@ class EmailVerificationView(APIView):
 class ResendEmailVerificationView(APIView):
     """
     Resend email verification endpoint.
-
-    POST /api/v1/auth/resend-verification/
-    {
-        "email": "user@example.com"
-    }
     """
 
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle, UserRateThrottle]
     serializer_class = ResendVerificationSerializer
 
+    @extend_schema(
+        operation_id="auth_password_reset_request",
+        summary="Password Reset Request",
+        description=(
+            "Request password reset for user account. "
+            "If email exists, a reset link will be sent. "
+            "Always returns success for security (doesn't reveal if email exists)."
+        ),
+        tags=["Authentication"],
+        request=PasswordResetRequestSerializer,
+        responses={
+            200: {
+                "description": "Password reset request processed",
+                "example": {
+                    "success": True,
+                    "message": (
+                        "If an account exists with this email, password reset "
+                        "instructions have been sent."
+                    ),
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            400: {
+                "description": "Invalid email format",
+                "example": {
+                    "success": False,
+                    "message": "Invalid email data",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {"email": ["Enter a valid email address"]}
+                    },
+                },
+            },
+            429: {"description": "Rate limit exceeded"},
+            500: {
+                "description": "Server error",
+                "example": {
+                    "success": False,
+                    "message": "Failed to process password reset request",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+        },
+        examples=[
+            OpenApiExample(
+                "Password Reset Request",
+                summary="Request password reset",
+                description="Send password reset instructions to email",
+                value={"email": "user@example.com"},
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
         """Resend email verification."""
         try:
@@ -170,17 +219,65 @@ class ResendEmailVerificationView(APIView):
 class PasswordResetRequestView(APIView):
     """
     Password reset request endpoint.
-
-    POST /api/v1/auth/password/reset/
-    {
-        "email": "user@example.com"
-    }
     """
 
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
     serializer_class = PasswordResetRequestSerializer
 
+    @extend_schema(
+        operation_id="auth_password_reset_request",
+        summary="Password Reset Request",
+        description=(
+            "Request password reset for user account. "
+            "If email exists, a reset link will be sent. "
+            "Always returns success for security (doesn't reveal if email exists)."
+        ),
+        tags=["Authentication"],
+        request=PasswordResetRequestSerializer,
+        responses={
+            200: {
+                "description": "Password reset request processed",
+                "example": {
+                    "success": True,
+                    "message": (
+                        "If an account exists with this email, password reset "
+                        "instructions have been sent."
+                    ),
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            400: {
+                "description": "Invalid email format",
+                "example": {
+                    "success": False,
+                    "message": "Invalid email data",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {"email": ["Enter a valid email address"]}
+                    },
+                },
+            },
+            429: {"description": "Rate limit exceeded"},
+            500: {
+                "description": "Server error",
+                "example": {
+                    "success": False,
+                    "message": "Failed to process password reset request",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+        },
+        examples=[
+            OpenApiExample(
+                "Password Reset Request",
+                summary="Request password reset",
+                description="Send password reset instructions to email",
+                value={"email": "user@example.com"},
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
         """Request password reset."""
         try:
@@ -237,19 +334,83 @@ class PasswordResetRequestView(APIView):
 class PasswordResetConfirmView(APIView):
     """
     Password reset confirmation endpoint.
-
-    POST /api/v1/auth/password/reset/confirm/
-    {
-        "token": "reset_token_here",
-        "password": "new_secure_password",
-        "password_confirm": "new_secure_password"
-    }
     """
 
     permission_classes = [AllowAny]
     throttle_classes = [AnonRateThrottle]
     serializer_class = PasswordResetConfirmSerializer
 
+    @extend_schema(
+        operation_id="auth_password_reset_confirm",
+        summary="Password Reset Confirmation",
+        description=(
+            "Reset password using reset token and new password. "
+            "Token is provided via email from password reset request. "
+            "Terminates all user sessions for security."
+        ),
+        tags=["Authentication"],
+        request=PasswordResetConfirmSerializer,
+        responses={
+            200: {
+                "description": "Password reset successful",
+                "example": {
+                    "success": True,
+                    "message": (
+                        "Password reset successful. "
+                        "Please log in with your new password."
+                    ),
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "user": {
+                            "id": 1,
+                            "email": "user@example.com",
+                            "full_name": "John Doe",
+                        }
+                    },
+                },
+            },
+            400: {
+                "description": "Invalid token or password validation failed",
+                "example": {
+                    "success": False,
+                    "message": "Invalid password reset data",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {
+                            "token": ["This token is invalid or has expired"],
+                            "password": ["Password too weak"],
+                            "password_confirm": ["Passwords do not match"],
+                        }
+                    },
+                },
+            },
+            429: {"description": "Rate limit exceeded"},
+            500: {
+                "description": "Server error",
+                "example": {
+                    "success": False,
+                    "message": "Failed to reset password. Please try again.",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+        },
+        examples=[
+            OpenApiExample(
+                "Password Reset Confirmation",
+                summary="Confirm password reset",
+                description="Reset password with token and new password",
+                value={
+                    "token": (
+                        "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9."
+                        "eyJ1c2VyX2lkIjoxLCJ0b2tlbl90eXBlIjoicGFzc3dvcmRfcmVzZXQifQ..."
+                    ),
+                    "password": "NewSecurePass123!",
+                    "password_confirm": "NewSecurePass123!",
+                },
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
         """Confirm password reset with token."""
         try:
@@ -262,52 +423,49 @@ class PasswordResetConfirmView(APIView):
                     field_errors=serializer.errors,
                 )
 
-            # Get validated data
-            token = serializer.validated_data["token"]
+            # Get the VerificationToken instance from validated data
+            verification_token = serializer.validated_data[
+                "token"
+            ]  # This is the VerificationToken object
             new_password = serializer.validated_data["password"]
 
-            # Validate and use token
-            try:
-                token_data = TokenService.verify_and_use_token(token)
-                user = token_data["user"]
+            # Get user from the verification token
+            user = verification_token.user
 
-                # Set new password
-                user.set_password(new_password)
-                user.save(update_fields=["password"])
+            # Mark token as used (this calls your model's verify() method)
+            verification_token.verify()
 
-                # Terminate all user sessions for security
-                from ..services.session_service import terminate_all_sessions
+            # Set new password
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
 
-                terminate_all_sessions(user=user, reason="password_reset")
+            # Terminate all user sessions for security
+            from ..services.session_service import terminate_all_sessions
 
-                # Prepare response data
-                user_data = {
-                    "id": user.id,
-                    "email": user.email,
-                    "full_name": user.full_name,
-                }
+            terminate_all_sessions(user=user, reason="password_reset")
 
-                logger.info(f"Password reset completed successfully: {user.email}")
+            # Prepare response data
+            user_data = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+            }
 
-                return APIResponse.success(
-                    message=_(
-                        "Password reset successful. Please log in with your new"
-                        " password."
-                    ),
-                    data={"user": user_data},
-                )
+            logger.info(f"Password reset completed successfully: {user.email}")
 
-            except TokenInvalidException as e:
-                logger.warning(f"Invalid password reset token attempt: {str(e)}")
-                return APIResponse.error(
-                    message=str(e.detail), status_code=status.HTTP_400_BAD_REQUEST
-                )
+            return APIResponse.success(
+                message=_(
+                    "Password reset successful. Please log in with your new password."
+                ),
+                data={"user": user_data},
+            )
 
-            except ValidationException as e:
-                return APIResponse.validation_error(
-                    message=str(e.detail),
-                    field_errors=getattr(e, "extra_data", {}).get("field_errors"),
-                )
+        except ValidationException as e:
+            logger.warning(f"Password reset validation failed: {str(e)}")
+            return APIResponse.validation_error(
+                message=str(e.detail),
+                field_errors=getattr(e, "extra_data", {}).get("field_errors"),
+            )
 
         except Exception as e:
             logger.error(f"Password reset confirmation error: {str(e)}")

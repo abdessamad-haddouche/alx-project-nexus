@@ -5,6 +5,7 @@ Handles user profile retrieval, updates, and password changes.
 
 import logging
 
+from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
@@ -14,8 +15,12 @@ from django.utils.translation import gettext_lazy as _
 from core.exceptions import AuthenticationException, ValidationException
 from core.responses import APIResponse
 
-from ..serializers import UserProfileSerializer, UserSerializer
-from ..services import change_user_password, update_user_profile
+from ..serializers import (
+    PasswordChangeSerializer,
+    UserProfileSerializer,
+    UserSerializer,
+)
+from ..services import update_user_profile
 
 logger = logging.getLogger(__name__)
 
@@ -204,71 +209,101 @@ class UserProfileUpdateView(APIView):
 class PasswordChangeView(APIView):
     """
     Password change endpoint for authenticated users.
-
-    POST /api/v1/auth/password/change/
-    {
-        "current_password": "current_password_here",
-        "new_password": "new_secure_password",
-        "new_password_confirm": "new_secure_password"
-    }
     """
 
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    serializer_class = PasswordChangeSerializer
 
+    @extend_schema(
+        operation_id="auth_password_change",
+        summary="Change Password",
+        description=(
+            "Change the authenticated user's password. "
+            "Requires current password verification.",
+        ),
+        tags=["Authentication"],
+        request=PasswordChangeSerializer,
+        responses={
+            200: {
+                "description": "Password changed successfully",
+                "example": {
+                    "success": True,
+                    "message": "Password changed successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            400: {
+                "description": "Validation errors",
+                "example": {
+                    "success": False,
+                    "message": "Password change data is invalid",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {
+                            "current_password": ["Current password is incorrect"],
+                            "new_password": ["Password too weak"],
+                            "new_password_confirm": [
+                                "Password confirmation does not match"
+                            ],
+                        }
+                    },
+                },
+            },
+            401: {
+                "description": "Authentication required or current password incorrect",
+                "example": {
+                    "success": False,
+                    "message": "Current password is incorrect",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            429: {"description": "Rate limit exceeded"},
+        },
+        examples=[
+            OpenApiExample(
+                "Password Change Request",
+                summary="Change user password",
+                description=(
+                    "Standard password change with current password verification",
+                ),
+                value={
+                    "current_password": "oldPassword123!",
+                    "new_password": "newSecurePassword456!",
+                    "new_password_confirm": "newSecurePassword456!",
+                },
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
-        """Handle password change."""
+        """Handle password change with serializer validation."""
         try:
-            user = request.user
+            # Initialize serializer with user context
+            serializer = self.serializer_class(
+                data=request.data, context={"user": request.user, "request": request}
+            )
 
-            # Validate required fields
-            current_password = request.data.get("current_password")
-            new_password = request.data.get("new_password")
-            new_password_confirm = request.data.get("new_password_confirm")
-
-            if not all([current_password, new_password, new_password_confirm]):
+            # Validate input data
+            if not serializer.is_valid():
                 return APIResponse.validation_error(
-                    message=_("All password fields are required"),
-                    field_errors={
-                        "current_password": _("Current password is required")
-                        if not current_password
-                        else None,
-                        "new_password": _("New password is required")
-                        if not new_password
-                        else None,
-                        "new_password_confirm": _("Password confirmation is required")
-                        if not new_password_confirm
-                        else None,
-                    },
+                    message=_("Password change data is invalid"),
+                    field_errors=serializer.errors,
                 )
 
-            # Validate password confirmation
-            if new_password != new_password_confirm:
-                return APIResponse.validation_error(
-                    message=_("Password confirmation does not match"),
-                    field_errors={
-                        "new_password_confirm": _(
-                            "Password confirmation does not match"
-                        )
-                    },
-                )
-
-            # Change password using service
+            # Change password using serializer
             try:
-                result = change_user_password(
-                    user=user,
-                    current_password=current_password,
-                    new_password=new_password,
-                )
+                serializer.save()
 
-                logger.info(f"Password changed successfully for user: {user.email}")
-                logger.info(f"Print result: {result}")
+                logger.info(
+                    f"Password changed successfully for user: {request.user.email}"
+                )
 
                 return APIResponse.success(message=_("Password changed successfully"))
 
             except AuthenticationException as e:
                 logger.warning(
-                    f"Invalid current password attempt for user: {user.email}"
+                    f"Invalid current password attempt for user: {request.user.email}"
                 )
                 return APIResponse.unauthorized(message=str(e.detail))
 
