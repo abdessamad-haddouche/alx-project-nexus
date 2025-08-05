@@ -18,12 +18,7 @@ from .auth_views import UserLoginView, UserLogoutView, UserRegistrationView
 from .session_views import CurrentSessionView, SessionTerminateView, UserSessionListView
 
 # JWT Token Management Views
-from .token_views import (
-    TokenBlacklistView,
-    TokenInfoView,
-    TokenRefreshView,
-    TokenVerifyView,
-)
+from .token_views import TokenRefreshView, TokenVerifyView
 
 # User Management Views
 from .user_views import PasswordChangeView, UserProfileUpdateView, UserProfileView

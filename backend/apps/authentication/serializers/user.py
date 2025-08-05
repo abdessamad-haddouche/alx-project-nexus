@@ -457,3 +457,59 @@ class PasswordChangeSerializer(BaseAuthSerializerMixin, serializers.Serializer):
         )
 
         return result
+
+
+class TokenRefreshSerializer(BaseAuthSerializerMixin, serializers.Serializer):
+    """
+    JWT token refresh serializer.
+    """
+
+    refresh = serializers.CharField(
+        help_text="Valid refresh token obtained during login",
+        error_messages={
+            "required": _("Refresh token is required"),
+            "blank": _("Refresh token cannot be blank"),
+        },
+    )
+
+    def validate_refresh(self, value):
+        """Validate refresh token format and existence."""
+        if not value or not value.strip():
+            raise serializers.ValidationError(_("Refresh token is required"))
+
+        # Basic JWT format validation
+        try:
+            from rest_framework_simplejwt.tokens import RefreshToken
+
+            # This will raise an exception if token is invalid
+            RefreshToken(value)
+        except Exception:
+            raise serializers.ValidationError(_("Invalid refresh token format"))
+
+        return value.strip()
+
+
+class TokenVerifySerializer(BaseAuthSerializerMixin, serializers.Serializer):
+    """
+    JWT token verification serializer.
+    """
+
+    token = serializers.CharField(
+        help_text="Access token to verify",
+        error_messages={
+            "required": _("Token is required"),
+            "blank": _("Token cannot be blank"),
+        },
+    )
+
+    def validate_token(self, value):
+        """Validate token format."""
+        if not value or not value.strip():
+            raise serializers.ValidationError(_("Token is required"))
+
+        # Basic JWT format validation
+        parts = value.strip().split(".")
+        if len(parts) != 3:
+            raise serializers.ValidationError(_("Invalid token format"))
+
+        return value.strip()

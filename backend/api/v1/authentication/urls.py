@@ -20,8 +20,6 @@ from apps.authentication.views import (
     ResendEmailVerificationView,
     SessionTerminateView,
     SuperAdminCreateView,
-    TokenBlacklistView,
-    TokenInfoView,
     TokenRefreshView,
     TokenVerifyView,
     UserLoginView,
@@ -48,8 +46,6 @@ urlpatterns = [
     # Token operations
     path("token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("token/verify/", TokenVerifyView.as_view(), name="token-verify"),
-    path("token/blacklist/", TokenBlacklistView.as_view(), name="token-blacklist"),
-    path("token/info/", TokenInfoView.as_view(), name="token-info"),
     # ================================================================
     # USER PROFILE MANAGEMENT
     # ================================================================
