@@ -15,6 +15,11 @@ from apps.movies.views import (
     MovieCreateView,
     MovieDeleteView,
     MovieDetailView,
+    MovieGenreCreateView,
+    MovieGenreDeleteView,
+    MovieGenreDetailView,
+    MovieGenreListView,
+    MovieGenreUpdateView,
     MovieListView,
     MovieSearchView,
     MovieUpdateView,
@@ -56,4 +61,29 @@ urlpatterns = [
     path("genres/<int:pk>/delete/", GenreDeleteView.as_view(), name="genre-delete"),
     # # Genre relationships
     path("genres/<int:pk>/movies/", GenreMoviesView.as_view(), name="genre-movies"),
+    # # ================================================================
+    # # MOVIE-GENRE RELATIONSHIPS
+    # # ================================================================
+    # # Movie-Genre relationship management
+    path("movie-genres/", MovieGenreListView.as_view(), name="movie-genre-list"),
+    path(
+        "movie-genres/create/",
+        MovieGenreCreateView.as_view(),
+        name="movie-genre-create",
+    ),
+    path(
+        "movie-genres/<int:pk>/",
+        MovieGenreDetailView.as_view(),
+        name="movie-genre-detail",
+    ),
+    path(
+        "movie-genres/<int:pk>/update/",
+        MovieGenreUpdateView.as_view(),
+        name="movie-genre-update",
+    ),
+    path(
+        "movie-genres/<int:pk>/delete/",
+        MovieGenreDeleteView.as_view(),
+        name="movie-genre-delete",
+    ),
 ]

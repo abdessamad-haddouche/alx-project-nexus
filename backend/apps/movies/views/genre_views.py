@@ -1,5 +1,5 @@
 # ================================================================
-# GENRE CRUD VIEWS WITH COMPLETE DOCUMENTATION
+# GENRE CRUD VIEWS
 # ================================================================
 
 import logging
@@ -370,24 +370,6 @@ class GenreCreateView(APIView):
         Create a new movie genre for content categorization.
 
         **Admin Only**: This operation requires admin privileges.
-
-        **Features:**
-        - Automatic slug generation from name
-        - TMDb ID validation and uniqueness checking
-        - Name uniqueness validation
-        - Auto-activation of new genres
-
-        **Validation Rules:**
-        - Genre name must be unique (case-insensitive)
-        - TMDb ID must be unique if provided
-        - Slug auto-generated if not provided
-        - Name must be at least 2 characters
-
-        **Use Cases:**
-        - Admin content management
-        - Custom genre creation
-        - TMDb sync operations
-        - Content categorization setup
         """,
         request=GenreCreateSerializer,
         responses={
@@ -467,13 +449,6 @@ class GenreDetailView(APIView):
         summary="Get genre details",
         description="""
         Get detailed information about a specific genre including statistics.
-
-        **Features:**
-        - Complete genre metadata
-        - Movie count and statistics
-        - Popular movies preview
-        - Recent movies preview
-        - Performance metrics
 
         **Response Details:**
         - Genre information (name, slug, TMDb ID)
@@ -675,12 +650,6 @@ class GenreDeleteView(APIView):
 
         **Admin Only**: This operation requires admin privileges.
 
-        **Soft Delete Behavior:**
-        - Genre is marked as inactive (not permanently deleted)
-        - Movie-genre relationships are preserved
-        - Can be reactivated if needed
-        - Maintains data integrity and audit trails
-
         **Business Impact:**
         - Movies lose this genre classification
         - Genre no longer appears in lists
@@ -773,96 +742,6 @@ class GenreDeleteView(APIView):
             logger.debug(f"Cleared caches for genre {genre_id}")
         except Exception as e:
             logger.warning(f"Failed to clear genre caches: {e}")
-
-    # =========================================================================
-    # GENRE BY SLUG VIEW
-    # =========================================================================
-
-    """
-    Get genre information by slug for SEO-friendly URLs.
-    """
-
-    permission_classes = [AllowAny]
-
-    @extend_schema(
-        summary="Get genre by slug",
-        description="""
-        Get genre information using SEO-friendly slug instead of ID.
-
-        **SEO Benefits:**
-        - Human-readable URLs (/genres/action/ instead of /genres/28/)
-        - Better search engine indexing
-        - User-friendly navigation
-        - Consistent URL structure
-
-        **Features:**
-        - Same detailed information as genre detail view
-        - Automatic slug-based lookup
-        - Cache optimization for popular genres
-        - Redirect handling for slug changes
-
-        **URL Examples:**
-        - /api/v1/movies/genres/action/
-        - /api/v1/movies/genres/science-fiction/
-        - /api/v1/movies/genres/romantic-comedy/
-        """,
-        responses={
-            200: GenreDetailSerializer,
-            404: None,
-            500: None,
-        },
-        tags=["Movies - Genres"],
-    )
-    def get(self, request, slug):
-        """Get genre by slug."""
-        try:
-            # Check cache first
-            cache_key = f"genre_slug_{slug}"
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                logger.info(f"Genre with slug '{slug}' retrieved from cache")
-                return APIResponse.success(
-                    message="Genre details (cached)", data=cached_data
-                )
-
-            # Get genre by slug
-            try:
-                genre = Genre.objects.get(slug=slug, is_active=True)
-            except Genre.DoesNotExist:
-                return APIResponse.not_found(
-                    message=f"Genre with slug '{slug}' not found",
-                    extra_data={
-                        "searched_slug": slug,
-                        "suggestions": [
-                            "Check the slug is correct",
-                            "Use /api/v1/movies/genres/ to see available genres",
-                            "Slug might have changed",
-                        ],
-                    },
-                )
-
-            # Serialize genre with detailed information
-            serializer = GenreDetailSerializer(
-                genre,
-                context={
-                    "request": request,
-                    "popular_movies_limit": 10,
-                    "recent_movies_limit": 10,
-                },
-            )
-
-            # Cache for 4 hours (slug-based access is often for SEO)
-            cache.set(cache_key, serializer.data, 60 * 60 * 4)
-
-            logger.info(f"Retrieved genre by slug: {genre.name} ({slug})")
-
-            return APIResponse.success(
-                message=f"Genre: {genre.name}", data=serializer.data
-            )
-
-        except Exception as e:
-            logger.error(f"Genre by slug error: {e}")
-            return APIResponse.server_error(message="Failed to get genre by slug")
 
 
 class GenreMoviesView(APIView):
@@ -1037,7 +916,7 @@ class GenreMoviesView(APIView):
             400: None,
             500: None,
         },
-        tags=["Movies - Genre Management"],
+        tags=["Movies - Genres"],
     )
     def get(self, request, pk):
         """Get movies by genre with intelligent database/TMDb fallback."""

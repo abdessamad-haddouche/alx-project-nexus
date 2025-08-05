@@ -433,10 +433,15 @@ SPECTACULAR_SETTINGS = {
         {"name": "Admin Management", "description": "Admin user management"},
         {"name": "Movies - Public", "description": "Public movie browsing and search"},
         {"name": "Movies - Admin", "description": "Administrative movie management"},
-        {"name": "Genres", "description": "Movie genre operations"},
-        {"name": "Recommendations", "description": "Movie recommendation engine"},
-        {"name": "Discovery", "description": "Movie discovery and trending"},
-        {"name": "External APIs", "description": "TMDb integration endpoints"},
+        {"name": "Movies - Genres", "description": "CRUD operations for movie genres"},
+        {
+            "name": "Movies - Genre Relationships",
+            "description": "CRUD operations for movie-genre associations and mappings",
+        },
+        {
+            "name": "Movies - Discovery",
+            "description": "Discovering popular, trending, and highly-rated movies",
+        },
     ],
     # UI Customization
     "SWAGGER_UI_SETTINGS": {

@@ -13,7 +13,6 @@ from .genre_views import (
     GenreUpdateView,
 )
 from .movie_genre_views import (
-    MovieGenreBulkCreateView,
     MovieGenreCreateView,
     MovieGenreDeleteView,
     MovieGenreDetailView,
