@@ -16,10 +16,12 @@ from .user import (
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    ProfileOnlyUpdateSerializer,
     TokenRefreshSerializer,
     TokenVerifySerializer,
     UserLoginSerializer,
     UserProfileSerializer,
+    UserProfileUpdateSerializer,
     UserRegistrationSerializer,
     UserSerializer,
 )
@@ -36,6 +38,8 @@ __all__ = [
     "PasswordResetConfirmSerializer",
     "TokenRefreshSerializer",
     "TokenVerifySerializer",
+    "UserProfileUpdateSerializer",
+    "ProfileOnlyUpdateSerializer",
     # Social (OAuth) Serializers
     "GoogleOAuthSerializer",
     "SocialAuthLinkSerializer",

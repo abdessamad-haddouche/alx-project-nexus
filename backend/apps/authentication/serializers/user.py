@@ -10,7 +10,13 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from core.constants import VerificationType
+from core.constants import (
+    Language,
+    PrivacyLevel,
+    ThemePreference,
+    Timezone,
+    VerificationType,
+)
 from core.mixins.serializers import BaseAuthSerializerMixin
 
 from ..models import UserProfile, VerificationToken
@@ -513,3 +519,142 @@ class TokenVerifySerializer(BaseAuthSerializerMixin, serializers.Serializer):
             raise serializers.ValidationError(_("Invalid token format"))
 
         return value.strip()
+
+
+class UserProfileUpdateSerializer(BaseAuthSerializerMixin, serializers.Serializer):
+    """
+    Combined user and profile update serializer.
+    Handles both user fields and profile fields in one request.
+    """
+
+    # User fields (optional)
+    first_name = serializers.CharField(
+        max_length=50, required=False, help_text="User's first name"
+    )
+    last_name = serializers.CharField(
+        max_length=50, required=False, help_text="User's last name"
+    )
+    phone_number = serializers.CharField(
+        max_length=15,
+        required=False,
+        allow_blank=True,
+        help_text="Phone number in international format",
+    )
+    avatar = serializers.URLField(
+        required=False, allow_blank=True, help_text="Profile picture URL"
+    )
+
+    # Profile fields (optional)
+    bio = serializers.CharField(
+        max_length=1000, required=False, allow_blank=True, help_text="User biography"
+    )
+    location = serializers.CharField(
+        max_length=100, required=False, allow_blank=True, help_text="User location"
+    )
+    timezone = serializers.ChoiceField(
+        choices=Timezone.choices, required=False, help_text="User timezone"
+    )
+    preferred_language = serializers.ChoiceField(
+        choices=Language.choices, required=False, help_text="Preferred language"
+    )
+    privacy_level = serializers.ChoiceField(
+        choices=PrivacyLevel.choices, required=False, help_text="Privacy level setting"
+    )
+    theme_preference = serializers.ChoiceField(
+        choices=ThemePreference.choices, required=False, help_text="UI theme preference"
+    )
+    notification_preferences = serializers.JSONField(
+        required=False, help_text="Notification preferences object"
+    )
+
+    def validate_bio(self, value):
+        """Validate bio length."""
+        if value and len(value.strip()) < 10:
+            raise serializers.ValidationError(
+                _("Biography must be at least 10 characters long")
+            )
+        return value
+
+    def validate_phone_number(self, value):
+        """Validate phone number format."""
+        if value and value.strip():
+            # Basic phone validation
+            import re
+
+            pattern = r"^\+?1?\d{9,15}$"
+            if not re.match(pattern, value.strip()):
+                raise serializers.ValidationError(_("Invalid phone number format"))
+        return value
+
+    def save(self, user):
+        """Update user and profile with validated data."""
+        validated_data = self.validated_data
+
+        # Separate user fields from profile fields
+        user_fields = ["first_name", "last_name", "phone_number", "avatar"]
+        profile_fields = [
+            "bio",
+            "location",
+            "timezone",
+            "preferred_language",
+            "privacy_level",
+            "theme_preference",
+            "notification_preferences",
+        ]
+
+        user_data = {k: v for k, v in validated_data.items() if k in user_fields}
+        profile_data = {k: v for k, v in validated_data.items() if k in profile_fields}
+
+        # Update user fields
+        for field, value in user_data.items():
+            setattr(user, field, value)
+        if user_data:
+            user.save(update_fields=list(user_data.keys()) + ["updated_at"])
+
+        # Update profile fields
+        if profile_data:
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            for field, value in profile_data.items():
+                setattr(profile, field, value)
+            profile.save(update_fields=list(profile_data.keys()) + ["updated_at"])
+        else:
+            # Ensure profile exists
+            profile, created = UserProfile.objects.get_or_create(user=user)
+
+        return user, profile
+
+
+class ProfileOnlyUpdateSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer):
+    """
+    Profile-only update serializer.
+    For updating only profile-specific fields.
+    """
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            "bio",
+            "location",
+            "timezone",
+            "preferred_language",
+            "privacy_level",
+            "theme_preference",
+            "notification_preferences",
+        ]
+        extra_kwargs = {
+            "bio": {"required": False},
+            "location": {"required": False},
+            "timezone": {"required": False},
+            "preferred_language": {"required": False},
+            "privacy_level": {"required": False},
+            "theme_preference": {"required": False},
+            "notification_preferences": {"required": False},
+        }
+
+    def validate_bio(self, value):
+        """Validate bio length."""
+        if value and len(value.strip()) < 10:
+            raise serializers.ValidationError(
+                _("Biography must be at least 10 characters long")
+            )
+        return value

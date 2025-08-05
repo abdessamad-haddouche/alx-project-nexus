@@ -17,10 +17,11 @@ from core.responses import APIResponse
 
 from ..serializers import (
     PasswordChangeSerializer,
+    ProfileOnlyUpdateSerializer,
     UserProfileSerializer,
+    UserProfileUpdateSerializer,
     UserSerializer,
 )
-from ..services import update_user_profile
 
 logger = logging.getLogger(__name__)
 
@@ -28,31 +29,53 @@ logger = logging.getLogger(__name__)
 class UserProfileView(APIView):
     """
     User profile management endpoint - Get and Update profile.
-
-    GET /api/v1/auth/profile/
-    - Returns current user profile data
-
-    PUT /api/v1/auth/profile/
-    {
-        "first_name": "John",
-        "last_name": "Doe",
-        "phone_number": "+1234567890",
-        "avatar": "https://example.com/avatar.jpg",
-        "bio": "Software developer passionate about movies",
-        "location": "San Francisco, CA",
-        "timezone": "America/Los_Angeles",
-        "preferred_language": "en",
-        "privacy_level": "public",
-        "theme_preference": "dark"
-    }
-
-    PATCH /api/v1/auth/profile/
-    - Partial updates allowed
     """
 
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
 
+    @extend_schema(
+        operation_id="auth_profile_get",
+        summary="Get User Profile",
+        description="Retrieve current user's profile information"
+        " including user data and profile settings.",
+        tags=["Authentication"],
+        responses={
+            200: {
+                "description": "Profile retrieved successfully",
+                "example": {
+                    "success": True,
+                    "message": "Profile retrieved successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "id": 1,
+                        "email": "user@example.com",
+                        "first_name": "John",
+                        "last_name": "Doe",
+                        "full_name": "John Doe",
+                        "avatar_url": "https://ui-avatars.com/api/?name=JD",
+                        "is_email_verified": True,
+                        "profile": {
+                            "bio": "Software developer passionate about movies",
+                            "location": "San Francisco, CA",
+                            "timezone": "America/Los_Angeles",
+                            "preferred_language": "en",
+                            "privacy_level": "public",
+                            "theme_preference": "dark",
+                        },
+                    },
+                },
+            },
+            401: {
+                "description": "Authentication required",
+                "example": {
+                    "success": False,
+                    "message": "Authentication credentials were not provided",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+        },
+    )
     def get(self, request):
         """Get current user profile."""
         try:
@@ -87,10 +110,79 @@ class UserProfileView(APIView):
             logger.error(f"Error retrieving profile for {request.user.email}: {str(e)}")
             return APIResponse.server_error(message=_("Failed to retrieve profile"))
 
+    @extend_schema(
+        operation_id="auth_profile_update",
+        summary="Update User Profile",
+        description="Update user profile information. Supports both "
+        "user fields and profile fields in one request.",
+        tags=["Authentication"],
+        request=UserProfileUpdateSerializer,
+        responses={
+            200: {
+                "description": "Profile updated successfully",
+                "example": {
+                    "success": True,
+                    "message": "Profile updated successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "id": 1,
+                        "email": "user@example.com",
+                        "first_name": "John",
+                        "last_name": "Doe",
+                        "profile": {"bio": "Updated bio", "location": "New York, NY"},
+                    },
+                },
+            },
+            400: {
+                "description": "Validation errors",
+                "example": {
+                    "success": False,
+                    "message": "Profile data is invalid",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {
+                            "bio": ["Biography must be at least 10 characters long"],
+                            "phone_number": ["Invalid phone number format"],
+                        }
+                    },
+                },
+            },
+        },
+        examples=[
+            OpenApiExample(
+                "Profile Update Request",
+                summary="Update profile information",
+                description="Update both user and profile fields",
+                value={
+                    "first_name": "John",
+                    "last_name": "Doe",
+                    "phone_number": "+1234567890",
+                    "bio": "Software developer passionate about movies",
+                    "location": "San Francisco, CA",
+                    "timezone": "America/Los_Angeles",
+                    "privacy_level": "public",
+                    "theme_preference": "dark",
+                },
+                request_only=True,
+            )
+        ],
+    )
     def put(self, request):
         """Full profile update."""
         return self._update_profile(request, partial=False)
 
+    @extend_schema(
+        operation_id="auth_profile_partial_update",
+        summary="Partial Update User Profile",
+        description="Partially update user profile information."
+        " Only provided fields will be updated.",
+        tags=["Authentication"],
+        request=UserProfileUpdateSerializer,
+        responses={
+            200: {"description": "Profile updated successfully"},
+            400: {"description": "Validation errors"},
+        },
+    )
     def patch(self, request):
         """Partial profile update."""
         return self._update_profile(request, partial=True)
@@ -100,30 +192,32 @@ class UserProfileView(APIView):
         try:
             user = request.user
 
-            # Update profile using service
-            try:
-                result = update_user_profile(user, **request.data)
+            # Validate using serializer
+            serializer = UserProfileUpdateSerializer(data=request.data)
 
-                # Serialize updated data
-                user_serializer = UserSerializer(result["user"])
-                profile_serializer = UserProfileSerializer(result["profile"])
-
-                response_data = {
-                    **user_serializer.data,
-                    "profile": profile_serializer.data,
-                }
-
-                logger.info(f"Profile updated for user: {user.email}")
-
-                return APIResponse.updated(
-                    message=_("Profile updated successfully"), data=response_data
-                )
-
-            except ValidationException as e:
+            if not serializer.is_valid():
                 return APIResponse.validation_error(
-                    message=str(e.detail),
-                    field_errors=getattr(e, "extra_data", {}).get("field_errors"),
+                    message=_("Profile data is invalid"),
+                    field_errors=serializer.errors,
                 )
+
+            # Update using serializer
+            updated_user, updated_profile = serializer.save(user)
+
+            # Serialize updated data
+            user_serializer = UserSerializer(updated_user)
+            profile_serializer = UserProfileSerializer(updated_profile)
+
+            response_data = {
+                **user_serializer.data,
+                "profile": profile_serializer.data,
+            }
+
+            logger.info(f"Profile updated for user: {user.email}")
+
+            return APIResponse.updated(
+                message=_("Profile updated successfully"), data=response_data
+            )
 
         except Exception as e:
             logger.error(f"Profile update error for {request.user.email}: {str(e)}")
@@ -132,27 +226,40 @@ class UserProfileView(APIView):
 
 class UserProfileUpdateView(APIView):
     """
-    Separate profile update endpoint for specific profile fields only.
-    Useful when you want to update only profile-specific data.
-
-    PUT/PATCH /api/v1/auth/profile/update/
-    {
-        "bio": "New bio",
-        "location": "New Location",
-        "timezone": "America/New_York",
-        "preferred_language": "es",
-        "privacy_level": "private",
-        "theme_preference": "light",
-        "notification_preferences": {
-            "email_notifications": true,
-            "push_notifications": false
-        }
-    }
+    Separate profile update endpoint for profile fields only.
     """
 
     permission_classes = [IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+    serializer_class = ProfileOnlyUpdateSerializer
 
+    @extend_schema(
+        operation_id="auth_profile_only_update",
+        summary="Update Profile Fields Only",
+        description="Update only profile-specific fields "
+        "(bio, location, preferences, etc.)",
+        tags=["Authentication"],
+        request=ProfileOnlyUpdateSerializer,
+        responses={
+            200: {
+                "description": "Profile updated successfully",
+                "example": {
+                    "success": True,
+                    "message": "Profile updated successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "profile": {
+                            "bio": "Updated bio",
+                            "location": "New Location",
+                            "timezone": "America/New_York",
+                            "privacy_level": "private",
+                        }
+                    },
+                },
+            },
+            400: {"description": "Validation errors"},
+        },
+    )
     def put(self, request):
         """Full profile update (profile fields only)."""
         return self._update_profile_only(request, partial=False)
@@ -176,7 +283,7 @@ class UserProfileUpdateView(APIView):
                 logger.info(f"Profile created for user: {user.email}")
 
             # Validate profile data
-            profile_serializer = UserProfileSerializer(
+            profile_serializer = self.serializer_class(
                 profile, data=request.data, partial=partial
             )
 
@@ -190,7 +297,7 @@ class UserProfileUpdateView(APIView):
             updated_profile = profile_serializer.save()
 
             # Return updated profile data
-            response_data = UserProfileSerializer(updated_profile).data
+            response_data = ProfileOnlyUpdateSerializer(updated_profile).data
 
             logger.info(f"Profile-only update completed for user: {user.email}")
 
