@@ -9,6 +9,8 @@ app_name = "api_v1"
 urlpatterns = [
     # Authentication endpoints
     path("auth/", include("api.v1.authentication.urls")),
+    # Admin management endpoints
+    path("admin-management/", include("api.v1.admin.urls")),
     # User management endpoints
     path("users/", include("api.v1.users.urls")),
     # Movie catalog endpoints

@@ -6,20 +6,12 @@ Handles user registration, login, logout, password reset, OAuth, etc.
 
 from django.urls import path
 
-# Import views from authentication app
 from apps.authentication.views import (
-    AdminCreateView,
-    AdminListView,
-    AdminPromoteView,
-    AdminRevokeView,
-    CurrentSessionView,
     EmailVerificationView,
     PasswordChangeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
     ResendEmailVerificationView,
-    SessionTerminateView,
-    SuperAdminCreateView,
     TokenRefreshView,
     TokenVerifyView,
     UserLoginView,
@@ -27,7 +19,6 @@ from apps.authentication.views import (
     UserProfileUpdateView,
     UserProfileView,
     UserRegistrationView,
-    UserSessionListView,
 )
 
 app_name = "authentication"
@@ -72,24 +63,5 @@ urlpatterns = [
         "resend-verification/",
         ResendEmailVerificationView.as_view(),
         name="resend-verification",
-    ),
-    # ================================================================
-    # SESSION MANAGEMENT
-    # ================================================================
-    # Session operations
-    path("sessions/", UserSessionListView.as_view(), name="sessions"),
-    path("sessions/current/", CurrentSessionView.as_view(), name="current-session"),
-    path(
-        "sessions/terminate/", SessionTerminateView.as_view(), name="session-terminate"
-    ),
-    # ================================================================
-    # ADMIN MANAGEMENT (SUPERUSER ONLY)
-    # ================================================================
-    path("admin/create/", AdminCreateView.as_view(), name="admin-create"),
-    path("admin/promote/", AdminPromoteView.as_view(), name="admin-promote"),
-    path("admin/revoke/<int:user_id>/", AdminRevokeView.as_view(), name="admin-revoke"),
-    path("admin/list/", AdminListView.as_view(), name="admin-list"),
-    path(
-        "superadmin/create/", SuperAdminCreateView.as_view(), name="superadmin-create"
     ),
 ]

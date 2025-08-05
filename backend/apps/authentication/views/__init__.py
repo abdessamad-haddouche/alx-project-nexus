@@ -14,9 +14,6 @@ from .admin_views import (
 # Core Authentication Views
 from .auth_views import UserLoginView, UserLogoutView, UserRegistrationView
 
-# Session Management Views
-from .session_views import CurrentSessionView, SessionTerminateView, UserSessionListView
-
 # JWT Token Management Views
 from .token_views import TokenRefreshView, TokenVerifyView
 
@@ -53,14 +50,6 @@ __all__ = [
     "EmailChangeRequestView",
     "EmailChangeConfirmView",
     "VerificationStatusView",
-    # Session Management
-    "UserSessionListView",
-    "SessionTerminateView",
-    "CurrentSessionView",
-    "SessionActivityView",
-    "SessionSecurityView",
-    "SessionStatsView",
-    "BulkSessionActionView",
     # JWT Token Management
     "JWTTokenRefreshView",
     "JWTTokenVerifyView",

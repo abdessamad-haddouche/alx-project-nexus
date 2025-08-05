@@ -5,6 +5,7 @@ Handles admin creation, promotion, revocation, and listing.
 
 import logging
 
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -61,23 +62,63 @@ class AdminCreateView(APIView):
         """Get serializer context with request."""
         return {"request": self.request}
 
+    @extend_schema(
+        operation_id="admin_management_create",
+        summary="Create Admin User",
+        description=(
+            "Create a new admin user account with staff privileges. "
+            "Only superusers can create admin accounts. "
+            "The new admin will have access to Django admin panel"
+            " and elevated permissions."
+        ),
+        tags=["Admin Management"],
+        request=AdminCreateSerializer,
+        responses={
+            201: {
+                "description": "Admin account created successfully",
+                "example": {
+                    "success": True,
+                    "message": "Admin account created successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "user": {
+                            "id": 2,
+                            "email": "admin@example.com",
+                            "full_name": "Admin User",
+                            "role": "admin",
+                            "is_staff": True,
+                            "date_joined": "2025-01-15T10:30:00Z",
+                        }
+                    },
+                },
+            },
+            400: {
+                "description": "Validation errors",
+                "example": {
+                    "success": False,
+                    "message": "Email already exists",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {
+                            "email": ["User with this email already exists"]
+                        }
+                    },
+                },
+            },
+            403: {
+                "description": "Permission denied - superuser required",
+                "example": {
+                    "success": False,
+                    "message": "You do not have permission to create admin accounts",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            500: {"description": "Server error"},
+        },
+    )
     def post(self, request: Request) -> Response:
         """
         Create new admin user.
-
-        **Request Body:**
-        ```json
-        {
-            "email": "admin@example.com",
-            "password": "StrongPassword123!",
-            "password_confirm": "StrongPassword123!",
-            "first_name": "Admin",
-            "last_name": "User",
-            "role": "admin",
-            "phone_number": "+1234567890",
-            "date_of_birth": "1990-01-01"
-        }
-        ```
         """
         try:
             serializer = self.get_serializer(data=request.data)
@@ -136,21 +177,45 @@ class SuperAdminCreateView(APIView):
         """Get serializer context with request."""
         return {"request": self.request}
 
+    @extend_schema(
+        operation_id="admin_management_create_superadmin",
+        summary="Create SuperAdmin User",
+        description=(
+            "Create a new superadmin user account with full system privileges. "
+            "Only existing superusers can create other superadmin accounts. "
+            "SuperAdmins have unrestricted access to all system functions and"
+            " can manage other admins. "
+        ),
+        tags=["Admin Management"],
+        request=SuperAdminCreateSerializer,
+        responses={
+            201: {
+                "description": "SuperAdmin account created successfully",
+                "example": {
+                    "success": True,
+                    "message": "SuperAdmin account created successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "user": {
+                            "id": 3,
+                            "email": "superadmin@example.com",
+                            "full_name": "Super Admin",
+                            "role": "superadmin",
+                            "is_staff": True,
+                            "is_superuser": True,
+                            "date_joined": "2025-01-15T10:30:00Z",
+                        }
+                    },
+                },
+            },
+            400: {"description": "Validation errors"},
+            403: {"description": "Permission denied - superuser required"},
+            500: {"description": "Server error"},
+        },
+    )
     def post(self, request: Request) -> Response:
         """
         Create new superadmin user.
-
-        **Request Body:**
-        ```json
-        {
-            "email": "superadmin@example.com",
-            "password": "VeryStrongPassword123!",
-            "password_confirm": "VeryStrongPassword123!",
-            "first_name": "Super",
-            "last_name": "Admin",
-            "phone_number": "+1234567890"
-        }
-        ```
         """
         try:
             serializer = self.get_serializer(data=request.data)
@@ -209,17 +274,52 @@ class AdminPromoteView(APIView):
         """Get serializer context with request."""
         return {"request": self.request}
 
+    @extend_schema(
+        operation_id="admin_management_promote_user",
+        summary="Promote User to Admin",
+        description=(
+            "Promote an existing regular user to admin role. "
+            "Only superusers can promote users to admin status. "
+            "The target user must exist, be active, and not already "
+            "have admin privileges. "
+            "This grants the user access to admin functions and Django admin panel."
+        ),
+        tags=["Admin Management"],
+        request=AdminPromoteSerializer,
+        responses={
+            200: {
+                "description": "User promoted successfully",
+                "example": {
+                    "success": True,
+                    "message": "User promoted successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "user": {
+                            "id": 5,
+                            "email": "user@example.com",
+                            "full_name": "John Doe",
+                            "role": "admin",
+                            "is_staff": True,
+                            "promoted_at": "2025-01-15T10:30:00Z",
+                        }
+                    },
+                },
+            },
+            400: {
+                "description": "Validation errors",
+                "example": {
+                    "success": False,
+                    "message": "User not found or already has admin privileges",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            403: {"description": "Permission denied - superuser required"},
+            500: {"description": "Server error"},
+        },
+    )
     def post(self, request: Request) -> Response:
         """
         Promote user to admin role.
-
-        **Request Body:**
-        ```json
-        {
-            "user_id": 123,
-            "role": "admin"
-        }
-        ```
         """
         try:
             serializer = self.get_serializer(data=request.data)
@@ -280,12 +380,68 @@ class AdminRevokeView(APIView):
         """Get serializer context with request."""
         return {"request": self.request}
 
+    @extend_schema(
+        operation_id="admin_management_revoke_privileges",
+        summary="Revoke Admin Privileges",
+        description=(
+            "Revoke admin privileges from a user, converting them back to "
+            "regular user status. "
+            "Only superusers can revoke admin privileges. "
+            "Cannot revoke privileges from other superusers - only regular admins. "
+            "This removes access to admin functions and Django admin panel."
+        ),
+        tags=["Admin Management"],
+        parameters=[
+            OpenApiParameter(
+                name="user_id",
+                type=int,
+                location=OpenApiParameter.PATH,
+                description="ID of the admin user to revoke privileges from",
+                required=True,
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Admin privileges revoked successfully",
+                "example": {
+                    "success": True,
+                    "message": "Admin privileges revoked successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "user": {
+                            "id": 5,
+                            "email": "user@example.com",
+                            "full_name": "John Doe",
+                            "role": "user",
+                            "is_staff": False,
+                            "revoked_at": "2025-01-15T10:30:00Z",
+                        }
+                    },
+                },
+            },
+            400: {
+                "description": "Validation errors",
+                "example": {
+                    "success": False,
+                    "message": "Cannot revoke privileges from superuser",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            403: {"description": "Permission denied - superuser required"},
+            404: {
+                "description": "User not found",
+                "example": {
+                    "success": False,
+                    "message": "User not found",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+            500: {"description": "Server error"},
+        },
+    )
     def delete(self, request: Request, user_id: int) -> Response:
         """
         Revoke admin privileges from user.
-
-        **URL Parameters:**
-        - `user_id`: ID of user to revoke admin privileges from
         """
         try:
             # Get user to revoke
@@ -355,13 +511,68 @@ class AdminListView(APIView):
         """Get serializer context with request."""
         return {"request": self.request}
 
+    @extend_schema(
+        operation_id="admin_management_list",
+        summary="List Admin Users",
+        description=(
+            "Get a comprehensive list of all admin users in the system. "
+            "Only superusers can view the admin user list. "
+            "Includes filtering options and system statistics. "
+            "Useful for admin management and system oversight."
+        ),
+        tags=["Admin Management"],
+        parameters=[
+            OpenApiParameter(
+                name="include_superusers",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Include superusers in the returned list",
+                default=True,
+            ),
+            OpenApiParameter(
+                name="role",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Filter results by specific admin role",
+                enum=["admin", "moderator", "superadmin"],
+            ),
+        ],
+        responses={
+            200: {
+                "description": "Admin users retrieved successfully",
+                "example": {
+                    "success": True,
+                    "message": "Admin users retrieved successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "users": [
+                            {
+                                "id": 1,
+                                "email": "admin@example.com",
+                                "full_name": "Admin User",
+                                "role": "admin",
+                                "is_staff": True,
+                                "is_superuser": False,
+                                "date_joined": "2025-01-10T10:30:00Z",
+                                "last_login": "2025-01-15T09:00:00Z",
+                            }
+                        ],
+                        "statistics": {
+                            "total_staff": 5,
+                            "total_superusers": 2,
+                            "total_regular_admins": 3,
+                            "filtered_count": 5,
+                        },
+                    },
+                },
+            },
+            403: {"description": "Permission denied - superuser required"},
+            500: {"description": "Server error"},
+        },
+    )
     def get(self, request: Request) -> Response:
         """
         Get list of all admin users.
-
-        **Query Parameters:**
-        - `include_superusers`: Include superusers in list (default: true)
-        - `role`: Filter by role ("admin", "moderator", "superadmin")
         """
         try:
             # Get query parameters

@@ -264,6 +264,67 @@ class UserProfileUpdateView(APIView):
         """Full profile update (profile fields only)."""
         return self._update_profile_only(request, partial=False)
 
+    @extend_schema(
+        operation_id="auth_profile_only_partial_update",
+        summary="Partial Update Profile Fields Only",
+        description="Partially update only profile-specific fields "
+        "(bio, location, preferences, etc.). Only provided fields will be updated.",
+        tags=["Authentication"],
+        request=ProfileOnlyUpdateSerializer,
+        responses={
+            200: {
+                "description": "Profile updated successfully",
+                "example": {
+                    "success": True,
+                    "message": "Profile updated successfully",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "data": {
+                        "profile": {
+                            "bio": "Updated bio",
+                            "location": "New Location",
+                            "timezone": "America/New_York",
+                            "privacy_level": "private",
+                        }
+                    },
+                },
+            },
+            400: {
+                "description": "Validation errors",
+                "example": {
+                    "success": False,
+                    "message": "Profile data is invalid",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                    "errors": {
+                        "field_errors": {
+                            "bio": ["Biography must be at least 10 characters long"],
+                            "timezone": ["Invalid timezone format"],
+                        }
+                    },
+                },
+            },
+            401: {
+                "description": "Authentication required",
+                "example": {
+                    "success": False,
+                    "message": "Authentication credentials were not provided",
+                    "timestamp": "2025-01-15T10:30:00Z",
+                },
+            },
+        },
+        examples=[
+            OpenApiExample(
+                "Partial Profile Update",
+                summary="Update specific profile fields",
+                description="Update only the fields you want to change",
+                value={
+                    "bio": "Updated biography text",
+                    "location": "New York, NY",
+                    "privacy_level": "private",
+                },
+                request_only=True,
+            ),
+        ],
+    )
     def patch(self, request):
         """Partial profile update (profile fields only)."""
         return self._update_profile_only(request, partial=True)

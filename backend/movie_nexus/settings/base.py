@@ -421,11 +421,16 @@ SPECTACULAR_SETTINGS = {
     # Schema customization
     "SCHEMA_PATH_PREFIX": "/api/v1/",
     "SCHEMA_PATH_PREFIX_TRIM": True,
+    "OPERATION_ID_GENERATOR": None,
+    "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
+    "DISABLE_AUTO_TAGS": True,
+    "APPEND_COMPONENTS": {},  # prevents warnings
     "TAGS": [
         {
             "name": "Authentication",
             "description": "User authentication and authorization",
         },
+        {"name": "Admin Management", "description": "Admin user management"},
         {"name": "Movies - Public", "description": "Public movie browsing and search"},
         {"name": "Movies - Admin", "description": "Administrative movie management"},
         {"name": "Genres", "description": "Movie genre operations"},

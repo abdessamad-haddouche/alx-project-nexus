@@ -30,15 +30,6 @@ from .oauth_service import (
     validate_oauth_token,
 )
 
-# Session Service
-from .session_service import (
-    SessionService,
-    create_user_session,
-    get_active_sessions,
-    terminate_all_sessions,
-    terminate_user_session,
-)
-
 # Token Service
 from .token_service import (
     TokenService,
@@ -65,7 +56,6 @@ __all__ = [
     "UserService",
     "OAuthService",
     "TokenService",
-    "SessionService",
     # Admin Services
     "AdminService",
     # User Management Services
@@ -84,10 +74,6 @@ __all__ = [
     "validate_verification_token",
     "create_password_reset_token",
     "cleanup_expired_tokens",
-    "create_user_session",
-    "terminate_user_session",
-    "terminate_all_sessions",
-    "get_active_sessions",
     "create_admin_user",
     "create_superadmin_user",
     "promote_user_to_admin",
