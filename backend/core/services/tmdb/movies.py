@@ -114,8 +114,14 @@ class MovieService(BaseTMDbService):
         try:
             params = {"language": kwargs.get("language", Language.ENGLISH.value)}
 
+            # Handle both string and enum inputs
+            if isinstance(time_window, str):
+                time_window_value = time_window
+            else:
+                time_window_value = time_window.value
+
             raw_data = self.client._make_request(
-                f"trending/movie/{time_window.value}",
+                f"trending/movie/{time_window_value}",
                 params=params,
                 cache_ttl=self.cache_settings.get("TRENDING_MOVIES_TTL", 900),
             )
@@ -128,12 +134,15 @@ class MovieService(BaseTMDbService):
                     for movie in raw_data.get("results", [])
                 ],
                 "pagination": self._transform_pagination(raw_data),
-                "time_window": time_window.value,
+                "time_window": time_window_value,
             }
 
         except Exception as e:
             logger.error(f"Error getting trending movies: {str(e)}")
-            return {"results": [], "pagination": {}, "time_window": time_window.value}
+            time_window_value = (
+                time_window if isinstance(time_window, str) else time_window.value
+            )
+            return {"results": [], "pagination": {}, "time_window": time_window_value}
 
     def get_genres_list(self, language="en-US") -> List[Dict[str, Any]]:
         """Get clean genres list"""

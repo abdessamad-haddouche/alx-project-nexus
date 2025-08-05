@@ -9,7 +9,12 @@ from apps.movies.views import (
     MovieCreateView,
     MovieDeleteView,
     MovieDetailView,
+    MovieListView,
+    MovieSearchView,
     MovieUpdateView,
+    PopularMoviesView,
+    TopRatedMoviesView,
+    TrendingMoviesView,
 )
 
 app_name = "movies"
@@ -20,8 +25,18 @@ urlpatterns = [
     # CORE MOVIE OPERATIONS
     # ================================================================
     # Movie CRUD operations
+    path("", MovieListView.as_view(), name="list"),
     path("create/", MovieCreateView.as_view(), name="create"),
     path("<int:pk>/", MovieDetailView.as_view(), name="detail"),
     path("<int:pk>/update/", MovieUpdateView.as_view(), name="update"),
     path("<int:pk>/delete/", MovieDeleteView.as_view(), name="delete"),
+    # # ================================================================
+    # # MOVIE SEARCH & DISCOVERY
+    # # ================================================================
+    # # Search operations
+    path("search/", MovieSearchView.as_view(), name="search"),
+    # Discovery operations
+    path("popular/", PopularMoviesView.as_view(), name="popular"),
+    path("trending/", TrendingMoviesView.as_view(), name="trending"),
+    path("top-rated/", TopRatedMoviesView.as_view(), name="top-rated"),
 ]

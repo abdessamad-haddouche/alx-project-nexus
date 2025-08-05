@@ -101,6 +101,8 @@ class TMDbClient:
 
             data = response.json()
 
+            print(f"The response from TMDB is:\n{data}")
+
             # Cache successful response
             cache.set(cache_key, data, cache_ttl)
 

@@ -331,7 +331,8 @@ class MovieService:
             return cached_results
 
         try:
-            tmdb_results = self.tmdb.get_popular_movies(page=page)
+            # Use the correct method call to movies service
+            tmdb_results = self.tmdb.movies.get_popular(page=page)
             formatted_results = self._format_movie_list_results(tmdb_results)
 
             cache_timeout = self.cache_settings.get("POPULAR_MOVIES_TTL", 1800)
@@ -371,7 +372,8 @@ class MovieService:
                 TMDBTimeWindow.DAY if time_window == "day" else TMDBTimeWindow.WEEK
             )
 
-            tmdb_results = self.tmdb.get_trending_movies(time_window=time_window_enum)
+            # FIX: Use the correct method call to movies service
+            tmdb_results = self.tmdb.movies.get_trending(time_window=time_window_enum)
             formatted_results = self._format_movie_list_results(tmdb_results)
 
             cache_timeout = self.cache_settings.get("TRENDING_MOVIES_TTL", 900)
@@ -405,10 +407,9 @@ class MovieService:
             cache_timeout = self.cache_settings.get("TOP_RATED_MOVIES_TTL", 43200)
             cache.set(cache_key, formatted_results, cache_timeout)
 
-            logger.info(
-                f"Retrieved {len(formatted_results.get('results', []))} "
-                "top-rated movies"
-            )
+            movie_count = len(formatted_results.get("results", []))
+            logger.info(f"Retrieved {movie_count} top-rated movies")
+
             return formatted_results
 
         except Exception as e:
@@ -767,20 +768,35 @@ class MovieService:
             "query": tmdb_results.get("query", ""),
         }
 
+    # def _format_movie_list_results(self, tmdb_results: Dict) -> Dict[str, Any]:
+    #     """Format movie list results from TMDb."""
+    #     results = []
+
+    #     for tmdb_movie in tmdb_results.get("results", []):
+    #         # Check if movie exists locally
+    #         local_movie = None
+    #         if tmdb_movie.get("tmdb_id"):
+    #             local_movie = self.get_movie_by_tmdb_id(tmdb_movie["tmdb_id"])
+
+    #         if local_movie:
+    #             results.append(self._format_movie_basic(local_movie))
+    #         else:
+    #             results.append(self._format_tmdb_movie_basic(tmdb_movie))
+
+    #     return {
+    #         "results": results,
+    #         "pagination": tmdb_results.get("pagination", {}),
+    #     }
+
     def _format_movie_list_results(self, tmdb_results: Dict) -> Dict[str, Any]:
-        """Format movie list results from TMDb."""
+        """
+        Format movie list results from TMDb - ALWAYS use fresh TMDb data for
+        discovery endpoints.
+        """
         results = []
 
         for tmdb_movie in tmdb_results.get("results", []):
-            # Check if movie exists locally
-            local_movie = None
-            if tmdb_movie.get("tmdb_id"):
-                local_movie = self.get_movie_by_tmdb_id(tmdb_movie["tmdb_id"])
-
-            if local_movie:
-                results.append(self._format_movie_basic(local_movie))
-            else:
-                results.append(self._format_tmdb_movie_basic(tmdb_movie))
+            results.append(self._format_tmdb_movie_basic(tmdb_movie))
 
         return {
             "results": results,
@@ -805,7 +821,7 @@ class MovieService:
             "vote_count": tmdb_movie.get("vote_count", 0),
             "rating_stars": round(tmdb_movie.get("vote_average", 0.0) / 2, 1),
             "poster_url": tmdb_movie.get("poster_url"),
-            "backdrop_url": tmdb_movie.get("backdrop_url"),
+            "backdrop_url": tmdb_movie.get("backdrop_url"),  # This should work!
             "genres": [],  # Would need to be populated from genre_ids
             "is_local": False,  # Indicates this is TMDb data, not local
         }
