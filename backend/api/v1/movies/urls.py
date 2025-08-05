@@ -6,6 +6,12 @@ Handles movie catalog, genres, search, discovery, and TMDb integration.
 from django.urls import path
 
 from apps.movies.views import (
+    GenreCreateView,
+    GenreDeleteView,
+    GenreDetailView,
+    GenreListView,
+    GenreMoviesView,
+    GenreUpdateView,
     MovieCreateView,
     MovieDeleteView,
     MovieDetailView,
@@ -39,4 +45,15 @@ urlpatterns = [
     path("popular/", PopularMoviesView.as_view(), name="popular"),
     path("trending/", TrendingMoviesView.as_view(), name="trending"),
     path("top-rated/", TopRatedMoviesView.as_view(), name="top-rated"),
+    # # ================================================================
+    # # GENRE OPERATIONS
+    # # ================================================================
+    # Genre CRUD operations
+    path("genres/", GenreListView.as_view(), name="genre-list"),
+    path("genres/create/", GenreCreateView.as_view(), name="genre-create"),
+    path("genres/<int:pk>/", GenreDetailView.as_view(), name="genre-detail"),
+    path("genres/<int:pk>/update/", GenreUpdateView.as_view(), name="genre-update"),
+    path("genres/<int:pk>/delete/", GenreDeleteView.as_view(), name="genre-delete"),
+    # # Genre relationships
+    path("genres/<int:pk>/movies/", GenreMoviesView.as_view(), name="genre-movies"),
 ]
