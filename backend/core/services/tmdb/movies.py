@@ -218,6 +218,34 @@ class MovieService(BaseTMDbService):
             logger.error(f"Error getting similar movies for {movie_id}: {str(e)}")
             return {"results": [], "pagination": {}, "movie_id": movie_id}
 
+    def get_top_rated(self, page: int = 1, **kwargs) -> Dict[str, Any]:
+        """Get top-rated movies from TMDb API."""
+        try:
+            params = {
+                "page": page,
+                "language": kwargs.get("language", Language.ENGLISH.value),
+            }
+
+            raw_data = self.client._make_request(
+                "movie/top_rated",
+                params=params,
+                cache_ttl=self.cache_settings.get("TOP_RATED_MOVIES_TTL", 43200),
+            )
+
+            config = self._get_image_config(kwargs.get("image_config", "LIST_VIEW"))
+
+            return {
+                "results": [
+                    self._transform_basic_movie(movie, config)
+                    for movie in raw_data.get("results", [])
+                ],
+                "pagination": self._transform_pagination(raw_data),
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting top-rated movies: {str(e)}")
+            return {"results": [], "pagination": {}}
+
     # ================================================================
     # TRANSFORMATION METHODS
     # ================================================================
