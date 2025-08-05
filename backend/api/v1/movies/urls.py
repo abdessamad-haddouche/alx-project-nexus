@@ -1,21 +1,27 @@
 """
-Movie catalog API endpoints.
-Handles movie listing, details, search, filtering, etc.
+Movies API endpoints.
+Handles movie catalog, genres, search, discovery, and TMDb integration.
 """
+
 from django.urls import path
+
+from apps.movies.views import (
+    MovieCreateView,
+    MovieDeleteView,
+    MovieDetailView,
+    MovieUpdateView,
+)
 
 app_name = "movies"
 
+
 urlpatterns = [
-    # # Movie listing and details
-    # path("", views.MovieListView.as_view(), name="movie-list"),
-    # path("<int:pk>/", views.MovieDetailView.as_view(), name="movie-detail"),
-    # # Movie discovery
-    # path("trending/", views.TrendingMoviesView.as_view(), name="trending-movies"),
-    # path("popular/", views.PopularMoviesView.as_view(), name="popular-movies"),
-    # path("latest/", views.LatestMoviesView.as_view(), name="latest-movies"),
-    # # Movie relationships
-    # path("<int:pk>/similar/", views.SimilarMoviesView.as_view(), name="similar-movies"),
-    # path("<int:pk>/cast/", views.MovieCastView.as_view(), name="movie-cast"),
-    # path("<int:pk>/crew/", views.MovieCrewView.as_view(), name="movie-crew"),
+    # ================================================================
+    # CORE MOVIE OPERATIONS
+    # ================================================================
+    # Movie CRUD operations
+    path("create/", MovieCreateView.as_view(), name="create"),
+    path("<int:pk>/", MovieDetailView.as_view(), name="detail"),
+    path("<int:pk>/update/", MovieUpdateView.as_view(), name="update"),
+    path("<int:pk>/delete/", MovieDeleteView.as_view(), name="delete"),
 ]

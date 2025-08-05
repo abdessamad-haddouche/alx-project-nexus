@@ -383,6 +383,38 @@ class MovieService:
             logger.error(f"Failed to get trending movies: {str(e)}")
             raise TMDbAPIException(f"Failed to get trending movies: {str(e)}")
 
+    def get_top_rated_movies(self, page: int = 1) -> Dict[str, Any]:
+        """Get top-rated movies with caching and error handling."""
+        logger.info(f"Getting top-rated movies, page: {page}")
+
+        cache_key = f"top_rated_movies_page_{page}"
+        cached_results = cache.get(cache_key)
+
+        if cached_results:
+            logger.debug("Top-rated movies retrieved from cache")
+            return cached_results
+
+        try:
+            # Use the TMDb service method you just added
+            tmdb_results = self.tmdb.movies.get_top_rated(page=page)
+
+            # Format results similar to other methods
+            formatted_results = self._format_movie_list_results(tmdb_results)
+
+            # Cache for 12 hours
+            cache_timeout = self.cache_settings.get("TOP_RATED_MOVIES_TTL", 43200)
+            cache.set(cache_key, formatted_results, cache_timeout)
+
+            logger.info(
+                f"Retrieved {len(formatted_results.get('results', []))} "
+                "top-rated movies"
+            )
+            return formatted_results
+
+        except Exception as e:
+            logger.error(f"Failed to get top-rated movies: {str(e)}")
+            raise TMDbAPIException(f"Failed to get top-rated movies: {str(e)}")
+
     def get_movies_by_genre(
         self, genre_id: int, page: int = 1, page_size: int = 20
     ) -> Dict[str, Any]:
