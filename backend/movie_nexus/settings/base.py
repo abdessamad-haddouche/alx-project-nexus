@@ -63,6 +63,7 @@ LOCAL_APPS = [
     "core",
     "apps.authentication",
     "apps.movies",
+    "apps.favorites",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -446,6 +447,10 @@ SPECTACULAR_SETTINGS = {
             "name": "Movies - Relationships",
             "description": "Movie-to-movie relationships including recommendations, "
             "similar movies, and genre associations",
+        },
+        {
+            "name": "Favorites - User",
+            "description": "Includes CRUD operations for favorites, watchlist management, user statistics, and discovery features.",
         },
     ],
     # UI Customization
