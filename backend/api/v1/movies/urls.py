@@ -19,11 +19,14 @@ from apps.movies.views import (
     MovieGenreDeleteView,
     MovieGenreDetailView,
     MovieGenreListView,
+    MovieGenresView,
     MovieGenreUpdateView,
     MovieListView,
+    MovieRecommendationsView,
     MovieSearchView,
     MovieUpdateView,
     PopularMoviesView,
+    SimilarMoviesView,
     TopRatedMoviesView,
     TrendingMoviesView,
 )
@@ -50,6 +53,17 @@ urlpatterns = [
     path("popular/", PopularMoviesView.as_view(), name="popular"),
     path("trending/", TrendingMoviesView.as_view(), name="trending"),
     path("top-rated/", TopRatedMoviesView.as_view(), name="top-rated"),
+    # ================================================================
+    # # MOVIE RELATIONSHIPS
+    # # ================================================================
+    # Movie recommendations and similar movies
+    path(
+        "<int:pk>/recommendations/",
+        MovieRecommendationsView.as_view(),
+        name="movie-recommendations",
+    ),
+    path("<int:pk>/similar/", SimilarMoviesView.as_view(), name="movie-similar"),
+    path("<int:pk>/genres/", MovieGenresView.as_view(), name="movie-genres"),
     # # ================================================================
     # # GENRE OPERATIONS
     # # ================================================================

@@ -442,6 +442,11 @@ SPECTACULAR_SETTINGS = {
             "name": "Movies - Discovery",
             "description": "Discovering popular, trending, and highly-rated movies",
         },
+        {
+            "name": "Movies - Relationships",
+            "description": "Movie-to-movie relationships including recommendations, "
+            "similar movies, and genre associations",
+        },
     ],
     # UI Customization
     "SWAGGER_UI_SETTINGS": {
