@@ -39,21 +39,11 @@ from .token_service import (
     validate_verification_token,
 )
 
-# User Management Service
-from .user_service import (
-    UserService,
-    change_user_password,
-    create_user_account,
-    update_user_profile,
-    verify_user_email,
-)
-
 __all__ = [
     # Email Service
     "EmailService",
     # Authentication Services
     "AuthenticationService",
-    "UserService",
     "OAuthService",
     "TokenService",
     # Admin Services
@@ -63,10 +53,6 @@ __all__ = [
     "generate_tokens",
     "refresh_token",
     "logout_user",
-    "create_user_account",
-    "verify_user_email",
-    "update_user_profile",
-    "change_user_password",
     "google_oauth_login",
     "link_social_account",
     "validate_oauth_token",

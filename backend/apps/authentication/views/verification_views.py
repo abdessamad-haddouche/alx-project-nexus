@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 
+from apps.users.services import verify_user_email
 from core.exceptions import TokenInvalidException, ValidationException
 from core.responses import APIResponse
 
@@ -24,7 +25,6 @@ from ..serializers import (
     PasswordResetRequestSerializer,
     ResendVerificationSerializer,
 )
-from ..services import verify_user_email
 from ..services.email_service import EmailService
 from ..services.token_service import TokenService
 

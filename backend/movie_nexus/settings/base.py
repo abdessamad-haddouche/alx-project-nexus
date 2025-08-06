@@ -64,6 +64,7 @@ LOCAL_APPS = [
     "apps.authentication",
     "apps.movies",
     "apps.favorites",
+    "apps.users",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -450,7 +451,8 @@ SPECTACULAR_SETTINGS = {
         },
         {
             "name": "Favorites - User",
-            "description": "Includes CRUD operations for favorites, watchlist management, user statistics, and discovery features.",
+            "description": "Includes CRUD operations for favorites, watchlist"
+            " management, user statistics, and discovery features.",
         },
     ],
     # UI Customization

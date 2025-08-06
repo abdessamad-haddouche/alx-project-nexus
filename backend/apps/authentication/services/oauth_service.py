@@ -13,12 +13,16 @@ from core.exceptions import AuthenticationException, ValidationException
 
 # Type hints only
 if TYPE_CHECKING:
-    from ..models import SocialAuth, User, UserProfile, UserSession
+    from apps.users.models import Profile as UserProfile
+
+    from ..models import SocialAuth, User, UserSession
 else:
     # Runtime imports
     from django.contrib.auth import get_user_model
 
-    from ..models import SocialAuth, UserProfile, UserSession
+    from apps.users.models import Profile as UserProfile
+
+    from ..models import SocialAuth, UserSession
 
     User = get_user_model()
 

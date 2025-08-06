@@ -13,15 +13,11 @@ from .session import (
 )
 from .social import GoogleOAuthSerializer, SocialAuthLinkSerializer
 from .user import (
-    PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
-    ProfileOnlyUpdateSerializer,
     TokenRefreshSerializer,
     TokenVerifySerializer,
     UserLoginSerializer,
-    UserProfileSerializer,
-    UserProfileUpdateSerializer,
     UserRegistrationSerializer,
     UserSerializer,
 )
@@ -30,16 +26,12 @@ from .verification import EmailVerificationSerializer, ResendVerificationSeriali
 __all__ = [
     # User Serializers
     "UserSerializer",
-    "UserProfileSerializer",
     "UserRegistrationSerializer",
     "UserLoginSerializer",
-    "PasswordChangeSerializer",
     "PasswordResetRequestSerializer",
     "PasswordResetConfirmSerializer",
     "TokenRefreshSerializer",
     "TokenVerifySerializer",
-    "UserProfileUpdateSerializer",
-    "ProfileOnlyUpdateSerializer",
     # Social (OAuth) Serializers
     "GoogleOAuthSerializer",
     "SocialAuthLinkSerializer",

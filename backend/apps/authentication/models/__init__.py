@@ -1,6 +1,6 @@
 from .session import UserSession
 from .social import SocialAuth
-from .user import User, UserProfile
+from .user import User
 from .verification import VerificationToken
 
-__all__ = ["User", "UserProfile", "SocialAuth", "VerificationToken", "UserSession"]
+__all__ = ["User", "SocialAuth", "VerificationToken", "UserSession"]

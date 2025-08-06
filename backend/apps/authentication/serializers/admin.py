@@ -9,10 +9,9 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from apps.users.models import Profile
 from core.constants import UserRole
 from core.mixins.serializers import BaseAuthSerializerMixin
-
-from ..models import UserProfile
 
 User = get_user_model()
 
@@ -117,7 +116,7 @@ class AdminCreateSerializer(BaseAuthSerializerMixin, serializers.ModelSerializer
         admin_user = User.objects.create_user(**validated_data)
 
         # Create profile
-        UserProfile.objects.create(user=admin_user)
+        Profile.objects.create(user=admin_user)
 
         return {
             "user": admin_user,
@@ -237,7 +236,7 @@ class SuperAdminCreateSerializer(BaseAuthSerializerMixin, serializers.ModelSeria
         superadmin_user = User.objects.create_superuser(**validated_data)
 
         # Create profile
-        UserProfile.objects.create(user=superadmin_user)
+        Profile.objects.create(user=superadmin_user)
 
         return {
             "user": superadmin_user,

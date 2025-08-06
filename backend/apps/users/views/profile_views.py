@@ -1,6 +1,6 @@
 """
 User profile management views for Movie Nexus.
-Handles user profile retrieval, updates, and password changes.
+Handles user profile retrieval and profile-specific updates.
 """
 
 import logging
@@ -12,15 +12,13 @@ from rest_framework.views import APIView
 
 from django.utils.translation import gettext_lazy as _
 
-from core.exceptions import AuthenticationException, ValidationException
+from apps.authentication.serializers import UserSerializer
 from core.responses import APIResponse
 
 from ..serializers import (
-    PasswordChangeSerializer,
     ProfileOnlyUpdateSerializer,
     UserProfileSerializer,
     UserProfileUpdateSerializer,
-    UserSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,11 +33,11 @@ class UserProfileView(APIView):
     throttle_classes = [UserRateThrottle]
 
     @extend_schema(
-        operation_id="auth_profile_get",
+        operation_id="user_profile_get",
         summary="Get User Profile",
         description="Retrieve current user's profile information"
         " including user data and profile settings.",
-        tags=["Authentication"],
+        tags=["User Management"],
         responses={
             200: {
                 "description": "Profile retrieved successfully",
@@ -92,9 +90,9 @@ class UserProfileView(APIView):
                 profile_data = profile_serializer.data
             except AttributeError:
                 # Profile doesn't exist, create it
-                from ..models import UserProfile
+                from ..models import Profile
 
-                profile = UserProfile.objects.create(user=user)
+                profile = Profile.objects.create(user=user)
                 profile_serializer = UserProfileSerializer(profile)
                 profile_data = profile_serializer.data
                 logger.info(f"Profile created for user: {user.email}")
@@ -111,11 +109,11 @@ class UserProfileView(APIView):
             return APIResponse.server_error(message=_("Failed to retrieve profile"))
 
     @extend_schema(
-        operation_id="auth_profile_update",
+        operation_id="user_profile_update",
         summary="Update User Profile",
         description="Update user profile information. Supports both "
         "user fields and profile fields in one request.",
-        tags=["Authentication"],
+        tags=["User Management"],
         request=UserProfileUpdateSerializer,
         responses={
             200: {
@@ -172,11 +170,11 @@ class UserProfileView(APIView):
         return self._update_profile(request, partial=False)
 
     @extend_schema(
-        operation_id="auth_profile_partial_update",
+        operation_id="user_profile_partial_update",
         summary="Partial Update User Profile",
         description="Partially update user profile information."
         " Only provided fields will be updated.",
-        tags=["Authentication"],
+        tags=["User Management"],
         request=UserProfileUpdateSerializer,
         responses={
             200: {"description": "Profile updated successfully"},
@@ -224,9 +222,9 @@ class UserProfileView(APIView):
             return APIResponse.server_error(message=_("Failed to update profile"))
 
 
-class UserProfileUpdateView(APIView):
+class ProfileOnlyUpdateView(APIView):
     """
-    Separate profile update endpoint for profile fields only.
+    Profile-only update endpoint for profile fields only.
     """
 
     permission_classes = [IsAuthenticated]
@@ -234,11 +232,11 @@ class UserProfileUpdateView(APIView):
     serializer_class = ProfileOnlyUpdateSerializer
 
     @extend_schema(
-        operation_id="auth_profile_only_update",
+        operation_id="user_profile_only_update",
         summary="Update Profile Fields Only",
         description="Update only profile-specific fields "
         "(bio, location, preferences, etc.)",
-        tags=["Authentication"],
+        tags=["User Management"],
         request=ProfileOnlyUpdateSerializer,
         responses={
             200: {
@@ -265,11 +263,11 @@ class UserProfileUpdateView(APIView):
         return self._update_profile_only(request, partial=False)
 
     @extend_schema(
-        operation_id="auth_profile_only_partial_update",
+        operation_id="user_profile_only_partial_update",
         summary="Partial Update Profile Fields Only",
         description="Partially update only profile-specific fields "
         "(bio, location, preferences, etc.). Only provided fields will be updated.",
-        tags=["Authentication"],
+        tags=["User Management"],
         request=ProfileOnlyUpdateSerializer,
         responses={
             200: {
@@ -338,9 +336,9 @@ class UserProfileUpdateView(APIView):
             try:
                 profile = user.profile
             except AttributeError:
-                from ..models import UserProfile
+                from ..models import Profile
 
-                profile = UserProfile.objects.create(user=user)
+                profile = Profile.objects.create(user=user)
                 logger.info(f"Profile created for user: {user.email}")
 
             # Validate profile data
@@ -372,115 +370,3 @@ class UserProfileUpdateView(APIView):
                 f"Profile-only update error for {request.user.email}: {str(e)}"
             )
             return APIResponse.server_error(message=_("Failed to update profile"))
-
-
-class PasswordChangeView(APIView):
-    """
-    Password change endpoint for authenticated users.
-    """
-
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [UserRateThrottle]
-    serializer_class = PasswordChangeSerializer
-
-    @extend_schema(
-        operation_id="auth_password_change",
-        summary="Change Password",
-        description=(
-            "Change the authenticated user's password. "
-            "Requires current password verification.",
-        ),
-        tags=["Authentication"],
-        request=PasswordChangeSerializer,
-        responses={
-            200: {
-                "description": "Password changed successfully",
-                "example": {
-                    "success": True,
-                    "message": "Password changed successfully",
-                    "timestamp": "2025-01-15T10:30:00Z",
-                },
-            },
-            400: {
-                "description": "Validation errors",
-                "example": {
-                    "success": False,
-                    "message": "Password change data is invalid",
-                    "timestamp": "2025-01-15T10:30:00Z",
-                    "errors": {
-                        "field_errors": {
-                            "current_password": ["Current password is incorrect"],
-                            "new_password": ["Password too weak"],
-                            "new_password_confirm": [
-                                "Password confirmation does not match"
-                            ],
-                        }
-                    },
-                },
-            },
-            401: {
-                "description": "Authentication required or current password incorrect",
-                "example": {
-                    "success": False,
-                    "message": "Current password is incorrect",
-                    "timestamp": "2025-01-15T10:30:00Z",
-                },
-            },
-            429: {"description": "Rate limit exceeded"},
-        },
-        examples=[
-            OpenApiExample(
-                "Password Change Request",
-                summary="Change user password",
-                description=(
-                    "Standard password change with current password verification",
-                ),
-                value={
-                    "current_password": "oldPassword123!",
-                    "new_password": "newSecurePassword456!",
-                    "new_password_confirm": "newSecurePassword456!",
-                },
-                request_only=True,
-            )
-        ],
-    )
-    def post(self, request):
-        """Handle password change with serializer validation."""
-        try:
-            # Initialize serializer with user context
-            serializer = self.serializer_class(
-                data=request.data, context={"user": request.user, "request": request}
-            )
-
-            # Validate input data
-            if not serializer.is_valid():
-                return APIResponse.validation_error(
-                    message=_("Password change data is invalid"),
-                    field_errors=serializer.errors,
-                )
-
-            # Change password using serializer
-            try:
-                serializer.save()
-
-                logger.info(
-                    f"Password changed successfully for user: {request.user.email}"
-                )
-
-                return APIResponse.success(message=_("Password changed successfully"))
-
-            except AuthenticationException as e:
-                logger.warning(
-                    f"Invalid current password attempt for user: {request.user.email}"
-                )
-                return APIResponse.unauthorized(message=str(e.detail))
-
-            except ValidationException as e:
-                return APIResponse.validation_error(
-                    message=str(e.detail),
-                    field_errors=getattr(e, "extra_data", {}).get("field_errors"),
-                )
-
-        except Exception as e:
-            logger.error(f"Password change error for {request.user.email}: {str(e)}")
-            return APIResponse.server_error(message=_("Failed to change password"))

@@ -4,10 +4,7 @@ Provides optimized queries and business logic methods.
 """
 
 from django.contrib.auth.models import BaseUserManager
-from django.db import models
 from django.utils.translation import gettext_lazy as _
-
-from core.constants import PrivacyLevel
 
 
 class UserManager(BaseUserManager):
@@ -51,19 +48,3 @@ class UserManager(BaseUserManager):
     def verified_users(self):
         """Get only users with verified emails."""
         return self.filter(is_email_verified=True, is_active=True)
-
-
-class UserProfileManager(models.Manager):
-    """
-    Custom manager for UserProfile.
-    """
-
-    def get_queryset(self):
-        """Optimize default queryset with select_related."""
-        return super().get_queryset().select_related("user")
-
-    def public_profiles(self):
-        """Get only public profiles."""
-        return self.filter(
-            privacy_level=PrivacyLevel.PUBLIC, is_active=True, user__is_active=True
-        )

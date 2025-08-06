@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from django.utils.translation import gettext_lazy as _
 
+from apps.users.services import create_user_account
 from core.exceptions import (
     AccountSuspendedException,
     AuthenticationException,
@@ -22,7 +23,7 @@ from core.exceptions import (
 from core.responses import APIResponse
 
 from ..serializers import UserLoginSerializer, UserRegistrationSerializer
-from ..services import authenticate_user, create_user_account, logout_user
+from ..services import authenticate_user, logout_user
 from ..services.email_service import EmailService
 
 logger = logging.getLogger(__name__)

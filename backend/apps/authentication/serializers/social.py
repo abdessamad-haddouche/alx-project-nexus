@@ -8,10 +8,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 
+from apps.users.models import Profile as UserProfile
 from core.constants import AuthProvider
 from core.mixins.serializers import BaseAuthSerializerMixin
 
-from ..models import SocialAuth, UserProfile
+from ..models import SocialAuth
 
 User = get_user_model()
 

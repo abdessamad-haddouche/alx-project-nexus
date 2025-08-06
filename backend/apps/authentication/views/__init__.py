@@ -17,9 +17,6 @@ from .auth_views import UserLoginView, UserLogoutView, UserRegistrationView
 # JWT Token Management Views
 from .token_views import TokenRefreshView, TokenVerifyView
 
-# User Management Views
-from .user_views import PasswordChangeView, UserProfileUpdateView, UserProfileView
-
 # Email Verification & Password Reset Views
 from .verification_views import (
     EmailVerificationView,
@@ -36,12 +33,6 @@ __all__ = [
     "UserLogoutView",
     "TokenRefreshView",
     "TokenVerifyView",
-    # User Management
-    "UserProfileView",
-    "UserProfileUpdateView",
-    "PasswordChangeView",
-    "UserAccountDeleteView",
-    "UserPreferencesView",
     # Email Verification & Password Reset
     "EmailVerificationView",
     "ResendEmailVerificationView",

@@ -16,14 +16,14 @@ from core.exceptions import PermissionException, ValidationException
 
 # Type hints only
 if TYPE_CHECKING:
-    from ..models import User, UserProfile
+    from apps.users.models import Profile as UserProfile
+
+    from ..models import User
 else:
     # Runtime imports
     from django.contrib.auth import get_user_model
 
-    from ..models import UserProfile
-
-    User = get_user_model()
+    from apps.users.models import Profile as UserProfile
 
 logger = logging.getLogger(__name__)
 

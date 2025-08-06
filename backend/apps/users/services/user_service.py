@@ -10,10 +10,12 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
+# Fixed imports
+from apps.authentication.models import User, VerificationToken
 from core.constants import VerificationType
 from core.exceptions import AuthenticationException, ValidationException
 
-from ..models import User, UserProfile, VerificationToken
+from ..models import Profile
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +86,8 @@ class UserService:
                 **extra_fields,
             )
 
-            # Create user profile
-            profile = UserProfile.objects.create(user=user)
+            # Create user profile - FIXED: Use Profile instead of UserProfile
+            profile = Profile.objects.create(user=user)
 
             # Create email verification token
             verification_token = VerificationToken.objects.create(

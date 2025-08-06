@@ -8,7 +8,6 @@ from django.urls import path
 
 from apps.authentication.views import (
     EmailVerificationView,
-    PasswordChangeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
     ResendEmailVerificationView,
@@ -16,8 +15,6 @@ from apps.authentication.views import (
     TokenVerifyView,
     UserLoginView,
     UserLogoutView,
-    UserProfileUpdateView,
-    UserProfileView,
     UserRegistrationView,
 )
 
@@ -38,16 +35,9 @@ urlpatterns = [
     path("token/refresh/", TokenRefreshView.as_view(), name="token-refresh"),
     path("token/verify/", TokenVerifyView.as_view(), name="token-verify"),
     # ================================================================
-    # USER PROFILE MANAGEMENT
-    # ================================================================
-    # Profile operations
-    path("profile/", UserProfileView.as_view(), name="profile"),
-    path("profile/update/", UserProfileUpdateView.as_view(), name="profile-update"),
-    # ================================================================
     # PASSWORD MANAGEMENT
     # ================================================================
     # Password operations
-    path("password/change/", PasswordChangeView.as_view(), name="password-change"),
     path("password/reset/", PasswordResetRequestView.as_view(), name="password-reset"),
     path(
         "password/reset/confirm/",

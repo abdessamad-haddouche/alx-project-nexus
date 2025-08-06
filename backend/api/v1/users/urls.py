@@ -1,16 +1,27 @@
 """
-User management API endpoints.
-Handles user profiles, preferences, settings, etc.
+User Management API endpoints.
+Handles user profile management, account settings, and user data operations.
 """
+
 from django.urls import path
+
+from apps.users.views import PasswordChangeView, ProfileOnlyUpdateView, UserProfileView
 
 app_name = "users"
 
 urlpatterns = [
-    # # Current user profile
-    # path("me/", views.CurrentUserProfileView.as_view(), name="current-user"),
-    # path("me/profile/", views.UserProfileUpdateView.as_view(), name="profile-update"),
-    # # Avatar management
-    # path('me/avatar/', views.AvatarUploadView.as_view(), name='avatar-upload'),
-    # path('me/avatar/delete/', views.AvatarDeleteView.as_view(), name='avatar-delete'),
+    # ================================================================
+    # PROFILE MANAGEMENT
+    # ================================================================
+    # Main profile endpoint - GET/PUT/PATCH (user + profile data)
+    path("profile/", UserProfileView.as_view(), name="profile"),
+    # Profile-only endpoint - PUT/PATCH (profile fields only)
+    path("profile/update/", ProfileOnlyUpdateView.as_view(), name="profile-update"),
+    # ================================================================
+    # ACCOUNT MANAGEMENT
+    # ================================================================
+    # Password change (authenticated users)
+    path(
+        "account/password/change/", PasswordChangeView.as_view(), name="password-change"
+    ),
 ]

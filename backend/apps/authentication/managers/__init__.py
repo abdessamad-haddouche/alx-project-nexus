@@ -5,7 +5,7 @@ Authentication app managers.
 
 from .session import UserSessionManager
 from .social import SocialAuthManager
-from .user import UserManager, UserProfileManager
+from .user import UserManager
 from .verification import TokenVerificationManager
 
 __all__ = [
