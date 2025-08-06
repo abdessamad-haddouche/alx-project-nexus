@@ -2,26 +2,26 @@
 Business logic service for Favorite operations.
 """
 
-from typing import Dict, List, Optional, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
-from typing import TYPE_CHECKING, Dict, Optional
 
-
-from core.exceptions import (
-    ValidationException,
-    NotFoundException,
-    MovieNotFoundException,
-)
 from apps.movies.models import Movie
+from core.exceptions import (
+    MovieNotFoundException,
+    NotFoundException,
+    ValidationException,
+)
+
 from ..models import Favorite
 from ..serializers import (
-    FavoriteSerializer,
     FavoriteCreateSerializer,
-    FavoriteUpdateSerializer,
     FavoriteListSerializer,
-    WatchlistSerializer,
+    FavoriteSerializer,
+    FavoriteUpdateSerializer,
     UserFavoriteStatsSerializer,
+    WatchlistSerializer,
 )
 
 # Type hints only
@@ -52,34 +52,32 @@ class FavoriteService:
             movie = Movie.objects.get(id=movie_id, is_active=True)
         except Movie.DoesNotExist:
             raise MovieNotFoundException(
-                detail=_("Movie not found."),
-                extra_data={'movie_id': movie_id}
+                detail=_("Movie not found."), extra_data={"movie_id": movie_id}
             )
 
         if Favorite.objects.user_has_favorited(user, movie):
             raise ValidationException(
                 detail=_("You have already favorited this movie."),
-                field_errors={'movie': _("Already in favorites.")},
+                field_errors={"movie": _("Already in favorites.")},
             )
 
         # Create favorite
-        favorite_data = {'movie': movie.id, **kwargs}
-        mock_request = type('MockRequest', (), {'user': user})()
-        context = {'request': mock_request}
+        favorite_data = {"movie": movie.id, **kwargs}
+        mock_request = type("MockRequest", (), {"user": user})()
+        context = {"request": mock_request}
         serializer = FavoriteCreateSerializer(data=favorite_data, context=context)
 
         if not serializer.is_valid():
             raise ValidationException(
-                detail=_("Invalid favorite data."),
-                field_errors=serializer.errors
+                detail=_("Invalid favorite data."), field_errors=serializer.errors
             )
-        
+
         favorite = serializer.save()
-        
+
         return {
-            'success': True,
-            'favorite': FavoriteSerializer(favorite).data,
-            'message': _("Movie added to favorites successfully."),
+            "success": True,
+            "favorite": FavoriteSerializer(favorite).data,
+            "message": _("Movie added to favorites successfully."),
         }
 
     @staticmethod
@@ -95,10 +93,10 @@ class FavoriteService:
             )
 
         favorite.delete()  # Soft delete
-        
+
         return {
-            'success': True,
-            'message': _("Movie removed from favorites."),
+            "success": True,
+            "message": _("Movie removed from favorites."),
         }
 
     @staticmethod
@@ -112,15 +110,15 @@ class FavoriteService:
         if Favorite.objects.user_has_favorited(user, movie):
             FavoriteService.remove_favorite(user, movie_id)
             return {
-                'is_favorited': False,
-                'message': _("Movie removed from favorites."),
+                "is_favorited": False,
+                "message": _("Movie removed from favorites."),
             }
         else:
             result = FavoriteService.add_favorite(user, movie_id)
             return {
-                'is_favorited': True,
-                'message': result['message'],
-                'favorite': result['favorite']
+                "is_favorited": True,
+                "message": result["message"],
+                "favorite": result["favorite"],
             }
 
     @staticmethod
@@ -136,19 +134,18 @@ class FavoriteService:
         serializer = FavoriteUpdateSerializer(
             instance=favorite, data=updates, partial=True
         )
-        
+
         if not serializer.is_valid():
             raise ValidationException(
-                detail=_("Invalid update data."),
-                field_errors=serializer.errors
+                detail=_("Invalid update data."), field_errors=serializer.errors
             )
 
         updated_favorite = serializer.save()
-        
+
         return {
-            'success': True,
-            'favorite': FavoriteSerializer(updated_favorite).data,
-            'message': _("Favorite updated successfully."),
+            "success": True,
+            "favorite": FavoriteSerializer(updated_favorite).data,
+            "message": _("Favorite updated successfully."),
         }
 
     # ================================================================
@@ -164,7 +161,7 @@ class FavoriteService:
             raise MovieNotFoundException(detail=_("Movie not found."))
 
         favorite, created = Favorite.objects.get_or_create(
-            user=user, movie=movie, defaults={'is_watchlist': True}
+            user=user, movie=movie, defaults={"is_watchlist": True}
         )
 
         if not created and favorite.is_watchlist:
@@ -172,12 +169,12 @@ class FavoriteService:
 
         if not created:
             favorite.is_watchlist = True
-            favorite.save(update_fields=['is_watchlist'])
+            favorite.save(update_fields=["is_watchlist"])
 
         return {
-            'success': True,
-            'favorite': FavoriteSerializer(favorite).data,
-            'message': _("Movie added to watchlist."),
+            "success": True,
+            "favorite": FavoriteSerializer(favorite).data,
+            "message": _("Movie added to watchlist."),
         }
 
     @staticmethod
@@ -195,12 +192,12 @@ class FavoriteService:
             message = _("Movie removed from watchlist.")
         else:
             favorite.is_watchlist = False
-            favorite.save(update_fields=['is_watchlist'])
+            favorite.save(update_fields=["is_watchlist"])
             message = _("Movie removed from watchlist but kept in favorites.")
 
         return {
-            'success': True,
-            'message': message,
+            "success": True,
+            "message": message,
         }
 
     # ================================================================
@@ -208,12 +205,14 @@ class FavoriteService:
     # ================================================================
 
     @staticmethod
-    def rate_movie(user: User, movie_id: int, rating: int, notes: str = "") -> Dict[str, Any]:
+    def rate_movie(
+        user: User, movie_id: int, rating: int, notes: str = ""
+    ) -> Dict[str, Any]:
         """Rate a movie (creates favorite if doesn't exist)."""
         if not (1 <= rating <= 10):
             raise ValidationException(
                 detail=_("Rating must be between 1 and 10."),
-                field_errors={'rating': _("Invalid rating value.")},
+                field_errors={"rating": _("Invalid rating value.")},
             )
 
         try:
@@ -224,19 +223,19 @@ class FavoriteService:
         favorite, created = Favorite.objects.get_or_create(
             user=user,
             movie=movie,
-            defaults={'user_rating': rating, 'notes': notes.strip()[:1000]}
+            defaults={"user_rating": rating, "notes": notes.strip()[:1000]},
         )
 
         if not created:
             favorite.user_rating = rating
             if notes:
                 favorite.notes = notes.strip()[:1000]
-            favorite.save(update_fields=['user_rating', 'notes'])
+            favorite.save(update_fields=["user_rating", "notes"])
 
         return {
-            'success': True,
-            'favorite': FavoriteSerializer(favorite).data,
-            'message': _("Movie rated successfully."),
+            "success": True,
+            "favorite": FavoriteSerializer(favorite).data,
+            "message": _("Movie rated successfully."),
         }
 
     # ================================================================
@@ -250,10 +249,10 @@ class FavoriteService:
             limit = 50
 
         favorites = Favorite.objects.for_user(user)[:limit]
-        
+
         return {
-            'favorites': FavoriteListSerializer(favorites, many=True).data,
-            'count': len(favorites)
+            "favorites": FavoriteListSerializer(favorites, many=True).data,
+            "count": len(favorites),
         }
 
     @staticmethod
@@ -263,10 +262,10 @@ class FavoriteService:
             limit = 50
 
         watchlist = Favorite.objects.user_watchlist(user)[:limit]
-        
+
         return {
-            'watchlist': WatchlistSerializer(watchlist, many=True).data,
-            'count': len(watchlist)
+            "watchlist": WatchlistSerializer(watchlist, many=True).data,
+            "count": len(watchlist),
         }
 
     @staticmethod
@@ -284,11 +283,11 @@ class FavoriteService:
             )
 
         results = Favorite.objects.search_user_favorites(user, query.strip())[:20]
-        
+
         return {
-            'results': FavoriteListSerializer(results, many=True).data,
-            'query': query.strip(),
-            'count': len(results)
+            "results": FavoriteListSerializer(results, many=True).data,
+            "query": query.strip(),
+            "count": len(results),
         }
 
     # ================================================================
@@ -314,24 +313,26 @@ class FavoriteService:
             limit = 20
 
         trending = Favorite.objects.most_favorited_movies(limit=limit, days=days)
-        
+
         # Get movie details
-        movie_ids = [item['movie'] for item in trending]
+        movie_ids = [item["movie"] for item in trending]
         movies = Movie.objects.filter(id__in=movie_ids, is_active=True)
         movie_map = {movie.id: movie for movie in movies}
-        
+
         result = []
         for item in trending:
-            movie = movie_map.get(item['movie'])
+            movie = movie_map.get(item["movie"])
             if movie:
-                result.append({
-                    'movie_id': movie.id,
-                    'movie_title': movie.title,
-                    'movie_poster': movie.get_poster_url(),
-                    'favorite_count': item['favorite_count'],
-                    'avg_user_rating': item['avg_rating'],
-                })
-        
+                result.append(
+                    {
+                        "movie_id": movie.id,
+                        "movie_title": movie.title,
+                        "movie_poster": movie.get_poster_url(),
+                        "favorite_count": item["favorite_count"],
+                        "avg_user_rating": item["avg_rating"],
+                    }
+                )
+
         return result
 
     # ================================================================
@@ -366,14 +367,16 @@ class FavoriteService:
 
         genres = Favorite.objects.user_genre_preferences(user)[:limit]
         total_favorites = Favorite.objects.user_favorites_count(user)
-        
+
         return [
             {
-                'genre_name': genre.name,
-                'favorite_count': getattr(genre, 'favorite_count', 0),
-                'percentage': round(
-                    (getattr(genre, 'favorite_count', 0) / max(1, total_favorites)) * 100, 1
-                )
+                "genre_name": genre.name,
+                "favorite_count": getattr(genre, "favorite_count", 0),
+                "percentage": round(
+                    (getattr(genre, "favorite_count", 0) / max(1, total_favorites))
+                    * 100,
+                    1,
+                ),
             }
             for genre in genres
         ]

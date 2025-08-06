@@ -109,6 +109,11 @@ class ValidationException(ClientErrorException):
             kwargs["extra_data"] = {"field_errors": field_errors}
         super().__init__(**kwargs)
 
+    @property
+    def field_errors(self) -> Dict[str, str]:
+        """Access field_errors directly (for backward compatibility)."""
+        return self.extra_data.get("field_errors", {})
+
 
 class InvalidInputException(ClientErrorException):
     """Raised when input data format or values are invalid."""
