@@ -64,7 +64,6 @@ urlpatterns = [
     ),
     path("<int:pk>/similar/", SimilarMoviesView.as_view(), name="movie-similar"),
     path("<int:pk>/genres/", MovieGenresView.as_view(), name="movie-genres"),
-    # # ================================================================
     # # GENRE OPERATIONS
     # # ================================================================
     # Genre CRUD operations

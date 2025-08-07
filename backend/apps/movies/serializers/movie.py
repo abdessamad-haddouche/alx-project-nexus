@@ -98,6 +98,14 @@ class MovieListSerializer(TimestampMixin, serializers.ModelSerializer):
             return {"id": genre.id, "name": genre.name, "slug": genre.slug}
         return None
 
+    def get_main_trailer_url(self, obj):
+        """Get main trailer URL."""
+        return obj.main_trailer_url
+
+    def get_main_trailer_embed_url(self, obj):
+        """Get main trailer embed URL."""
+        return obj.main_trailer_embed_url
+
 
 class MovieDetailSerializer(MovieListSerializer):
     """
@@ -116,6 +124,10 @@ class MovieDetailSerializer(MovieListSerializer):
     is_highly_rated = serializers.ReadOnlyField()
     sync_age_hours = serializers.ReadOnlyField()
 
+    # Trailer URLs
+    main_trailer_url = serializers.SerializerMethodField()
+    main_trailer_embed_url = serializers.SerializerMethodField()
+
     class Meta(MovieListSerializer.Meta):
         fields = MovieListSerializer.Meta.fields + [
             "genres",
@@ -127,6 +139,9 @@ class MovieDetailSerializer(MovieListSerializer):
             "last_synced",
             "sync_status",
             "sync_age_hours",
+            "main_trailer_key",
+            "main_trailer_url",
+            "main_trailer_embed_url",
             "metadata",
         ]
 
@@ -221,6 +236,9 @@ class MovieCreateSerializer(UserContextMixin, serializers.ModelSerializer):
             "metadata",
             # Control Fields
             "is_active",
+            # Trailers
+            "main_trailer_key",
+            "main_trailer_site",
         ]
         extra_kwargs = {
             # Required fields for TMDb sync
@@ -254,7 +272,6 @@ class MovieCreateSerializer(UserContextMixin, serializers.ModelSerializer):
         except (ValueError, TypeError):
             raise serializers.ValidationError(_("TMDb ID must be a positive integer."))
 
-        # Check uniqueness for new movies
         if self.instance is None:
             if Movie.objects.filter(tmdb_id=value).exists():
                 raise serializers.ValidationError(
@@ -446,6 +463,9 @@ class MovieUpdateSerializer(UserContextMixin, serializers.ModelSerializer):
             "metadata",
             # Control Fields
             "is_active",
+            # Trailers
+            "main_trailer_key",
+            "main_trailer_site",
         ]
         # Note: tmdb_id is intentionally excluded from updates to prevent conflicts
 

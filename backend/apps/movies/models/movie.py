@@ -127,6 +127,23 @@ class Movie(TMDbContentMixin, BaseModelMixin, MetadataMixin):
         help_text=_("IMDb identifier (e.g., tt1234567)"),
     )
 
+    # Video content
+    main_trailer_key = models.CharField(
+        _("main trailer key"),
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text=_("YouTube key for main trailer"),
+    )
+
+    main_trailer_site = models.CharField(
+        _("main trailer site"),
+        max_length=20,
+        blank=True,
+        default="YouTube",
+        help_text=_("Video site (YouTube, Vimeo, etc.)"),
+    )
+
     # Content Classification
     adult = models.BooleanField(
         _("adult content"),
@@ -261,6 +278,22 @@ class Movie(TMDbContentMixin, BaseModelMixin, MetadataMixin):
     def imdb_url(self):
         """Get IMDb URL if IMDb ID exists."""
         return f"https://www.imdb.com/title/{self.imdb_id}/" if self.imdb_id else None
+
+    @property
+    def main_trailer_url(self):
+        """Get YouTube URL for main trailer."""
+        if self.main_trailer_key and self.main_trailer_site == "YouTube":
+            return f"https://www.youtube.com/watch?v={self.main_trailer_key}"
+        return None
+
+    @property
+    def main_trailer_embed_url(self):
+        """Get YouTube embed URL for main trailer."""
+        if self.main_trailer_key and self.main_trailer_site == "YouTube":
+            return f"https://www.youtube.com/embed/{self.main_trailer_key}"
+        return None
+
+    ###################################
 
     # Methods
     def get_poster_url(self, size="w500"):

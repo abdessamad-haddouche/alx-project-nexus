@@ -87,6 +87,8 @@ class TMDbClient:
                 url, params=params, headers=headers, timeout=self.timeout
             )
 
+            print(response)
+
             # Handle errors
             if response.status_code == status.HTTP_401_UNAUTHORIZED:
                 raise TMDbAuthenticationException("Invalid API credentials")
@@ -100,8 +102,6 @@ class TMDbClient:
                 raise TMDbAPIException(f"TMDb API error: {response.status_code}")
 
             data = response.json()
-
-            print(f"The response from TMDB is:\n{data}")
 
             # Cache successful response
             cache.set(cache_key, data, cache_ttl)

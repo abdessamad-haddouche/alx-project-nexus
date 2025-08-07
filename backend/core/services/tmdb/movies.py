@@ -283,6 +283,7 @@ class MovieService(BaseTMDbService):
             )
             if movie_data.get("poster_path")
             else None,
+            "backdrop_path": movie_data.get("backdrop_path"),
             "backdrop_url": self.get_image_url(
                 movie_data.get("backdrop_path", ""),
                 self._get_image_size(image_config.get("backdrop_size", "w780")),
@@ -307,6 +308,7 @@ class MovieService(BaseTMDbService):
         transformed.update(self._transform_keywords(movie_data))
         transformed.update(self._transform_external_ids(movie_data))
         transformed.update(self._transform_recommendations(movie_data))
+        transformed.update(self._extract_trailer_data(movie_data))
 
         return transformed
 
@@ -340,6 +342,23 @@ class MovieService(BaseTMDbService):
             ],
             "production_countries": movie_data.get("production_countries", []),
             "spoken_languages": movie_data.get("spoken_languages", []),
+        }
+
+    def _extract_trailer_data(self, movie_data: Dict) -> Dict[str, Any]:
+        """Extract main trailer data for database storage."""
+        videos = movie_data.get("videos", {}).get("results", [])
+        trailers = [v for v in videos if v.get("type") == "Trailer"]
+
+        if trailers:
+            main_trailer = trailers[0]  # Get the first trailer
+            return {
+                "main_trailer_key": main_trailer.get("key"),
+                "main_trailer_site": main_trailer.get("site", "YouTube"),
+            }
+
+        return {
+            "main_trailer_key": None,
+            "main_trailer_site": "YouTube",
         }
 
     def _transform_credits(

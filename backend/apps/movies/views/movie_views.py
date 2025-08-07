@@ -1,8 +1,10 @@
 """
-Core Movie CRUD Operations with Essential OpenAPI Documentation.
+Core Movie CRUD Operations.
 """
 
+import hashlib
 import logging
+from typing import Any, Dict
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
@@ -13,6 +15,7 @@ from rest_framework.views import APIView
 
 from django.core.cache import cache
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -31,89 +34,31 @@ logger = logging.getLogger(__name__)
 
 
 class MovieListView(APIView):
-    """List movies from database with API fallback."""
+    """
+    List movies with progressive data loading strategy:
+    1. Cache complete API responses (VIEW level)
+    2. Store partial data from TMDb popular endpoint
+    3. Use database when sufficient movies available
+    """
 
     permission_classes = [AllowAny]
     movie_service = MovieService()
 
+    # Cache settings
+    CACHE_TTL = 60 * 30  # 30 minutes for complete responses
+    MIN_MOVIES_FOR_DB = 100
+
     @extend_schema(
         summary="List movies",
-        description="List movies with filtering. Uses database"
-        " when available, TMDb API as fallback.",
-        parameters=[
-            OpenApiParameter(
-                name="search",
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Search across title, original title, and overview",
-                examples=[
-                    OpenApiExample("Movie Title", value="batman"),
-                    OpenApiExample("Actor Name", value="leonardo dicaprio"),
-                    OpenApiExample("Keywords", value="superhero action"),
-                ],
-            ),
-            OpenApiParameter(
-                name="genre",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Filter by genre (TMDb genre ID)",
-                examples=[
-                    OpenApiExample("Action", value=28),
-                    OpenApiExample("Comedy", value=35),
-                    OpenApiExample("Drama", value=18),
-                    OpenApiExample("Horror", value=27),
-                    OpenApiExample("Sci-Fi", value=878),
-                ],
-            ),
-            OpenApiParameter(
-                name="min_rating",
-                type=OpenApiTypes.NUMBER,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Minimum TMDb rating (0.0-10.0)",
-                examples=[
-                    OpenApiExample("Good Movies", value=7.0),
-                    OpenApiExample("Great Movies", value=8.0),
-                    OpenApiExample("Masterpieces", value=9.0),
-                ],
-            ),
-            OpenApiParameter(
-                name="page",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Page number (default: 1)",
-                examples=[
-                    OpenApiExample("First Page", value=1),
-                    OpenApiExample("Second Page", value=2),
-                ],
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Items per page (default: 20, max: 100)",
-                examples=[
-                    OpenApiExample("Small Page", value=10),
-                    OpenApiExample("Default Page", value=20),
-                    OpenApiExample("Large Page", value=50),
-                ],
-            ),
-        ],
-        responses={
-            200: MovieListSerializer(many=True),
-            400: None,
-            500: None,
-        },
-        tags=["Movies - Public"],
-    )
-    @extend_schema(
-        summary="List movies",
-        description="List movies with filtering. Uses database"
-        " when available, TMDb API as fallback.",
+        description="""
+        List movies with progressive data loading strategy.
+
+        **Data Strategy:**
+        - Check database first for this specific page
+        - If not enough data → fetch from TMDb API and store as partial data
+        - Store movies with sync_status='partial' for fast browsing
+        - Use database when sufficient movies available
+        """,
         parameters=[
             OpenApiParameter(
                 name="search",
@@ -173,38 +118,77 @@ class MovieListView(APIView):
         tags=["Movies - Public"],
     )
     def get(self, request) -> Response:
-        """List movies - hybrid database + API approach."""
+        """EXACT LOGIC: Page by page storage and retrieval."""
         try:
-            # Get filters
             search = request.query_params.get("search", "").strip()
             genre_id = request.query_params.get("genre")
             min_rating = request.query_params.get("min_rating")
             page = int(request.query_params.get("page", 1))
             page_size = min(int(request.query_params.get("page_size", 20)), 100)
 
-            # Check if we have enough movies in database
+            # Check if we have enough movies in database for THIS PAGE
             total_movies = Movie.objects.filter(is_active=True).count()
+            expected_movies_for_this_page = page * page_size
 
-            if total_movies >= 50:  # Database has enough content
+            # Check if we have enough data for this specific page
+            if total_movies >= expected_movies_for_this_page and not any(
+                [search, genre_id, min_rating]
+            ):
+                # Enough data AND no filters -> use database
                 logger.info(
-                    f"Using database for movie list ({total_movies} movies available)"
+                    f"Using DATABASE for page {page} - have {total_movies} movies"
                 )
-                return self._get_from_database(
+                response_data = self._get_from_database(
                     request, search, genre_id, min_rating, page, page_size
                 )
+                return APIResponse.success(
+                    f"Movies retrieved from DATABASE (page {page})", response_data
+                )
             else:
-                logger.info(f"Database has only {total_movies} movies, using TMDb API")
-                return self._get_from_api(request, page)
+                # Need to get from API and store
+                if any([search, genre_id, min_rating]):
+                    logger.info(f"Using DATABASE for page {page} with filters")
+                    response_data = self._get_from_database(
+                        request, search, genre_id, min_rating, page, page_size
+                    )
+                    return APIResponse.success(
+                        f"Movies retrieved from DATABASE with filters (page {page})",
+                        response_data,
+                    )
+                else:
+                    logger.info(
+                        f"Getting from TMDb API for page {page} - need {expected_movies_for_this_page}, have {total_movies}"
+                    )
+                    response_data = self._get_from_api_and_store(page)
+                    return APIResponse.success(
+                        f"Movies retrieved from TMDb API and STORED (page {page})",
+                        response_data,
+                    )
 
+        except ValueError:
+            return APIResponse.validation_error("Invalid page parameters")
         except Exception as e:
-            logger.error(f"Error in movie list: {e}")
-            return APIResponse.server_error(message="Failed to retrieve movies")
+            logger.error(f"MovieListView error: {e}")
+            return APIResponse.server_error("Failed to retrieve movies")
+
+    def _get_cache_key(
+        self, search: str, genre_id: str, min_rating: str, page: int, page_size: int
+    ) -> str:
+        """Generate cache key for complete API response."""
+        key_data = f"movies_list_{page}_{page_size}_{search}_{genre_id}_{min_rating}"
+        return f"view_cache_{hashlib.md5(key_data.encode()).hexdigest()[:8]}"
 
     def _get_from_database(
-        self, request, search, genre_id, min_rating, page, page_size
-    ):
-        """Get movies from local database with filtering."""
-        # Build queryset
+        self,
+        request,
+        search: str,
+        genre_id: str,
+        min_rating: str,
+        page: int,
+        page_size: int,
+    ) -> Dict[str, Any]:
+        """Get filtered movies from database."""
+        # Build queryset with optimizations
         queryset = (
             Movie.objects.select_related()
             .prefetch_related("genres")
@@ -218,104 +202,158 @@ class MovieListView(APIView):
                 | Q(original_title__icontains=search)
                 | Q(overview__icontains=search)
             )
-
         if genre_id:
             try:
                 queryset = queryset.filter(genres__tmdb_id=int(genre_id))
             except ValueError:
                 pass
-
         if min_rating:
             try:
                 queryset = queryset.filter(vote_average__gte=float(min_rating))
             except ValueError:
                 pass
 
-        # Order by popularity
+        # Order and paginate
         queryset = queryset.order_by("-popularity", "-vote_average")
-
-        # Paginate
         paginator = Paginator(queryset, page_size)
 
         try:
             movies_page = paginator.page(page)
-        except PageNotAnInteger:
-            movies_page = paginator.page(1)  # Invalid page format -> page 1
-        except EmptyPage:
-            # Page out of range -> return empty results
-            return APIResponse.success(
-                message=f"Page {page} is out of range",
-                data={
-                    "results": [],
-                    "pagination": {
-                        "page": page,
-                        "page_size": page_size,
-                        "total_pages": paginator.num_pages,
-                        "total_results": paginator.count,
-                        "has_next": False,
-                        "has_previous": page > 1,
-                        "max_page": paginator.num_pages,
-                    },
-                    "data_source": "Database",
-                    "database_movie_count": Movie.objects.filter(
-                        is_active=True
-                    ).count(),
-                },
-            )
+        except (PageNotAnInteger, EmptyPage):
+            movies_page = paginator.page(1) if paginator.num_pages > 0 else None
+
+        if not movies_page or not movies_page.object_list:
+            return {"results": [], "pagination": {}, "data_source": "DATABASE (empty)"}
 
         # Serialize
         serializer = MovieListSerializer(
             movies_page, many=True, context={"request": request}
         )
 
-        response_data = {
+        return {
             "results": serializer.data,
             "pagination": {
                 "page": movies_page.number,
-                "page_size": page_size,
                 "total_pages": paginator.num_pages,
                 "total_results": paginator.count,
                 "has_next": movies_page.has_next(),
                 "has_previous": movies_page.has_previous(),
             },
-            "data_source": "Database",
-            "database_movie_count": Movie.objects.filter(is_active=True).count(),
+            "data_source": "DATABASE",
+            "page": movies_page.number,
+            "total_movies_in_db": paginator.count,
         }
 
-        return APIResponse.success(
-            message=f"Retrieved {len(serializer.data)} movies from database",
-            data=response_data,
-        )
-
-    def _get_from_api(self, request, page):
-        """Get movies from TMDb API when database is sparse."""
+    def _get_from_api_and_store(self, page: int) -> Dict[str, Any]:
+        """Get from TMDb API and ACTUALLY STORE the fucking data."""
         try:
-            popular_data = self.movie_service.get_popular_movies(page=page)
-
-            popular_data["data_source"] = "TMDb API (Database Building...)"
-            popular_data["database_movie_count"] = Movie.objects.filter(
-                is_active=True
-            ).count()
-            popular_data["note"] = (
-                "Database is being built. More movies will be available"
-                " locally over time."
+            # Get raw data from TMDb API
+            api_data = self.movie_service.get_popular_movies(
+                page=page, store_movies=False
             )
 
-            return APIResponse.success(
-                message=f"Retrieved {len(popular_data.get('results', []))} movies "
-                "from TMDb API",
-                data=popular_data,
-            )
+            if not api_data.get("results"):
+                return {
+                    "results": [],
+                    "pagination": {},
+                    "data_source": "TMDb API (no results)",
+                    "stored_movies": 0,
+                }
+
+            stored_count = self._store_partial_movies(api_data["results"])
+            logger.info(f"STORED {stored_count} movies from TMDb API page {page}")
+
+            return {
+                "results": api_data["results"],
+                "pagination": api_data.get("pagination", {}),
+                "data_source": "TMDb API + STORED",
+                "stored_movies": stored_count,
+                "page": page,
+                "total_movies_in_db": Movie.objects.filter(is_active=True).count(),
+            }
+
         except Exception as e:
-            logger.error(f"TMDb API failed: {e}")
-            return APIResponse.server_error(message="Failed to retrieve movies")
+            logger.error(f"TMDb API failed for page {page}: {e}")
+            raise
+
+    def _store_partial_movies(self, movies_data: list) -> int:
+        """Store movies with sync_status='partial'."""
+        stored = 0
+
+        try:
+            with transaction.atomic():
+                for movie in movies_data:
+                    tmdb_id = movie.get("tmdb_id") or movie.get("id")
+
+                    if not tmdb_id or Movie.objects.filter(tmdb_id=tmdb_id).exists():
+                        continue
+
+                    # Create with partial data - INCLUDE ALL REQUIRED FIELDS
+                    Movie.objects.create(
+                        tmdb_id=str(tmdb_id),
+                        title=movie.get("title", ""),
+                        original_title=movie.get("original_title", "")
+                        or movie.get("title", ""),
+                        overview=movie.get("overview", ""),
+                        release_date=self._parse_date(movie.get("release_date")),
+                        adult=movie.get("adult", False),
+                        popularity=movie.get("popularity", 0.0),
+                        vote_average=movie.get("vote_average", 0.0),
+                        vote_count=movie.get("vote_count", 0),
+                        original_language=movie.get("original_language", "en"),
+                        poster_path=movie.get("poster_path") or "",
+                        backdrop_path=movie.get("backdrop_path") or "",
+                        # PARTIAL DATA STATUS
+                        sync_status="partial",
+                        last_synced=timezone.now(),
+                        is_active=True,
+                        # Defaults for missing fields
+                        runtime=None,
+                        budget=0,
+                        revenue=0,
+                        homepage="",
+                        tagline="",
+                        main_trailer_key=None,
+                        main_trailer_site="YouTube",
+                        status="Released",
+                    )
+                    stored += 1
+                    logger.info(
+                        f"STORED movie: {movie.get('title')} (TMDb ID: {tmdb_id})"
+                    )
+
+        except Exception as e:
+            logger.error(f"Error storing partial movies: {e}")
+
+        logger.info(f"Stored {stored} partial movies")
+        return stored
+
+    def _parse_date(self, date_string: str):
+        """Parse date string to date object."""
+        if not date_string:
+            return None
+        try:
+            from datetime import datetime
+
+            return datetime.strptime(date_string, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            return None
 
 
 class MovieDetailView(APIView):
-    """Get movie details with smart database storage."""
+    """
+    Get movie details with smart upgrade strategy:
+    1. Cache complete serialized responses (VIEW level)
+    2. Check database first
+    3. If partial data → upgrade to complete
+    4. If missing → fetch complete data and store
+    """
 
     permission_classes = [AllowAny]
     movie_service = MovieService()
+
+    # Cache settings
+    CACHE_TTL = 60 * 60 * 24  # 24 hours for movie details
 
     @extend_schema(
         summary="Get movie details",
@@ -329,81 +367,103 @@ class MovieDetailView(APIView):
         tags=["Movies - Public"],
     )
     def get(self, request, pk: int) -> Response:
-        """Get movie details - stores in database if not exists."""
+        """Get movie details with smart caching and upgrading."""
         try:
-            # Step 1: Check cache first
-            cache_key = f"movie_detail_{pk}"
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                logger.info(f"Movie detail retrieved from cache: TMDb ID {pk}")
-                return APIResponse.success(
-                    message="Movie details retrieved (cached)", data=cached_data
-                )
+            # VIEW-LEVEL CACHE: Complete serialized response
+            cache_key = f"movie_detail_view_{pk}"
+            cached_response = cache.get(cache_key)
 
-            # Step 2: Check database by TMDb ID
+            if cached_response:
+                logger.info(f"Complete detail response CACHED for TMDb ID {pk}")
+                return APIResponse.success("Movie details from CACHE", cached_response)
+
+            # Check database first
             try:
                 movie = (
                     Movie.objects.select_related()
-                    .prefetch_related(
-                        "genres",
-                        "movie_genres__genre",
-                    )
+                    .prefetch_related("genres", "movie_genres__genre")
                     .get(tmdb_id=pk, is_active=True)
                 )
 
-                logger.info(f"Movie found in database: {movie.title}")
+                # Check if we need to upgrade from partial to complete
+                if movie.sync_status == "partial":
+                    logger.info(f"Upgrading partial movie {pk} to complete data")
+                    movie = self._upgrade_to_complete_data(movie)
+                    source = "DATABASE (upgraded from partial)"
+                else:
+                    source = "DATABASE (complete)"
 
-                # Found in database - serialize and cache
+                # Serialize and cache complete response
                 serializer = MovieDetailSerializer(movie, context={"request": request})
-                cache.set(cache_key, serializer.data, 60 * 60 * 24)  # Cache 24 hours
+                cache.set(cache_key, serializer.data, self.CACHE_TTL)
 
                 return APIResponse.success(
-                    message="Movie details retrieved from database",
-                    data=serializer.data,
+                    f"Movie details from {source}", serializer.data
                 )
 
             except Movie.DoesNotExist:
-                # Step 3: Not in database - fetch from TMDb and store
+                # Not in database, fetch complete data
                 logger.info(
-                    f"Movie TMDb ID {pk} not in database, fetching from TMDb..."
+                    f"Movie {pk} not in database, fetching complete data from TMDb"
                 )
+                movie = self._fetch_and_store_complete(pk)
 
-                try:
-                    # Sync from TMDb (this will store in database)
-                    movie = self.movie_service.sync_movie_from_tmdb(pk)
-
-                    if movie:
-                        logger.info(
-                            f"Movie successfully synced and stored: {movie.title}"
-                        )
-
-                        # Serialize the newly stored movie
-                        serializer = MovieDetailSerializer(
-                            movie, context={"request": request}
-                        )
-                        cache.set(cache_key, serializer.data, 60 * 60 * 24)
-
-                        return APIResponse.success(
-                            message="Movie details retrieved from TMDb and "
-                            "stored in database",
-                            data=serializer.data,
-                        )
-                    else:
-                        return APIResponse.not_found(
-                            message="Movie not found on TMDb",
-                            extra_data={"tmdb_id": pk},
-                        )
-
-                except Exception as e:
-                    logger.error(f"Failed to sync movie {pk} from TMDb: {e}")
-                    return APIResponse.server_error(
-                        message="Failed to fetch movie details",
-                        extra_data={"tmdb_id": pk},
+                if not movie:
+                    return APIResponse.not_found(
+                        "Movie not found on TMDb", {"tmdb_id": pk}
                     )
+
+                # Serialize and cache
+                serializer = MovieDetailSerializer(movie, context={"request": request})
+                cache.set(cache_key, serializer.data, self.CACHE_TTL)
+
+                return APIResponse.success(
+                    "Movie details from TMDb API (fetched and stored)", serializer.data
+                )
 
         except Exception as e:
             logger.error(f"Error in movie detail view for TMDb ID {pk}: {e}")
-            return APIResponse.server_error(message="Failed to retrieve movie")
+            return APIResponse.server_error("Failed to retrieve movie details")
+
+    def _upgrade_to_complete_data(self, movie: Movie) -> Movie:
+        """Upgrade partial movie data to complete data."""
+        try:
+            tmdb_data = self.movie_service.tmdb.get_movie_details(int(movie.tmdb_id))
+
+            if tmdb_data:
+                # Update movie with complete data
+                updated_movie = self.movie_service.update_movie_data(movie, tmdb_data)
+                updated_movie.sync_status = "complete"
+                updated_movie.last_synced = timezone.now()
+                updated_movie.save(update_fields=["sync_status", "last_synced"])
+
+                logger.info(f"Successfully upgraded {movie.title} to complete data")
+                return updated_movie
+
+            return movie
+
+        except Exception as e:
+            logger.error(f"Failed to upgrade movie {movie.tmdb_id}: {e}")
+            return movie
+
+    def _fetch_and_store_complete(self, tmdb_id: int) -> Movie:
+        """Fetch complete movie data and store in database."""
+        try:
+            # SERVICE-LEVEL: Get complete movie data (with internal caching)
+            movie = self.movie_service.sync_movie_from_tmdb(tmdb_id)
+
+            if movie:
+                movie.sync_status = "complete"
+                movie.last_synced = timezone.now()
+                movie.save(update_fields=["sync_status", "last_synced"])
+                logger.info(f"Fetched and stored complete movie: {movie.title}")
+
+            return movie
+
+        except Exception as e:
+            logger.error(f"Failed to fetch complete movie {tmdb_id}: {e}")
+            return None
+            return None
 
 
 class MovieCreateView(APIView):

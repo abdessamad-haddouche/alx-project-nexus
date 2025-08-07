@@ -311,12 +311,15 @@ class MovieService:
     # MOVIE DISCOVERY OPERATIONS
     # =========================================================================
 
-    def get_popular_movies(self, page: int = 1) -> Dict[str, Any]:
+    def get_popular_movies(
+        self, page: int = 1, store_movies: bool = False
+    ) -> Dict[str, Any]:
         """
-        Get popular movies from TMDb with local caching.
+        Get popular movies from TMDb with optional storage.
 
         Args:
             page: Page number for pagination
+            store_movies: Whether to store movies in database
 
         Returns:
             Dictionary with popular movies and pagination info
@@ -333,7 +336,9 @@ class MovieService:
         try:
             # Use the correct method call to movies service
             tmdb_results = self.tmdb.movies.get_popular(page=page)
-            formatted_results = self._format_movie_list_results(tmdb_results)
+            formatted_results = self._format_movie_list_results(
+                tmdb_results, store_movies=store_movies
+            )
 
             cache_timeout = self.cache_settings.get("POPULAR_MOVIES_TTL", 1800)
             cache.set(cache_key, formatted_results, cache_timeout)
@@ -402,10 +407,6 @@ class MovieService:
 
             # Format results similar to other methods
             formatted_results = self._format_movie_list_results(tmdb_results)
-
-            # Cache for 12 hours
-            cache_timeout = self.cache_settings.get("TOP_RATED_MOVIES_TTL", 43200)
-            cache.set(cache_key, formatted_results, cache_timeout)
 
             movie_count = len(formatted_results.get("results", []))
             logger.info(f"Retrieved {movie_count} top-rated movies")
@@ -532,6 +533,8 @@ class MovieService:
             "homepage": tmdb_data.get("homepage") or "",
             "imdb_id": tmdb_data.get("imdb_id") or "",
             "tagline": tmdb_data.get("tagline") or "",
+            "main_trailer_key": tmdb_data.get("main_trailer_key"),
+            "main_trailer_site": tmdb_data.get("main_trailer_site", "YouTube"),
         }
 
     def _update_movie_fields(self, movie: Movie, tmdb_data: Dict[str, Any]) -> None:
@@ -558,6 +561,8 @@ class MovieService:
             "homepage": "homepage",
             "imdb_id": "imdb_id",
             "tagline": "tagline",
+            "main_trailer_key": "main_trailer_key",
+            "main_trailer_site": "main_trailer_site",
         }
 
         for tmdb_field, model_field in field_mapping.items():
@@ -689,6 +694,9 @@ class MovieService:
             "backdrop_url": movie.get_backdrop_url(),
             "tmdb_url": movie.tmdb_url,
             "imdb_url": movie.imdb_url,
+            "main_trailer_key": movie.main_trailer_key,
+            "main_trailer_url": movie.main_trailer_url,
+            "main_trailer_embed_url": movie.main_trailer_embed_url,
             "genres": [
                 {
                     "id": genre.tmdb_id,
@@ -730,6 +738,9 @@ class MovieService:
             "backdrop_url": movie.get_backdrop_url(),
             "genres": movie.genre_names,
             "primary_genre": movie.primary_genre.name if movie.primary_genre else None,
+            "main_trailer_url": movie.main_trailer_url,
+            "main_trailer_embed_url": movie.main_trailer_embed_url,
+            ##############################
         }
 
     def _format_search_results(
@@ -768,34 +779,104 @@ class MovieService:
             "query": tmdb_results.get("query", ""),
         }
 
-    # def _format_movie_list_results(self, tmdb_results: Dict) -> Dict[str, Any]:
-    #     """Format movie list results from TMDb."""
-    #     results = []
+    def _store_basic_movie(self, tmdb_movie_data: Dict[str, Any]) -> Optional[Movie]:
+        """Store basic movie data from TMDb list/search results in database."""
+        from django.utils import timezone
 
-    #     for tmdb_movie in tmdb_results.get("results", []):
-    #         # Check if movie exists locally
-    #         local_movie = None
-    #         if tmdb_movie.get("tmdb_id"):
-    #             local_movie = self.get_movie_by_tmdb_id(tmdb_movie["tmdb_id"])
+        tmdb_id = tmdb_movie_data.get("tmdb_id") or tmdb_movie_data.get("id")
 
-    #         if local_movie:
-    #             results.append(self._format_movie_basic(local_movie))
-    #         else:
-    #             results.append(self._format_tmdb_movie_basic(tmdb_movie))
+        if not tmdb_id:
+            logger.warning("TMDb movie data missing tmdb_id")
+            return None
 
-    #     return {
-    #         "results": results,
-    #         "pagination": tmdb_results.get("pagination", {}),
-    #     }
+        try:
+            with transaction.atomic():
+                # Check if already exists
+                existing_movie = Movie.objects.filter(tmdb_id=tmdb_id).first()
+                if existing_movie:
+                    return existing_movie
 
-    def _format_movie_list_results(self, tmdb_results: Dict) -> Dict[str, Any]:
-        """
-        Format movie list results from TMDb - ALWAYS use fresh TMDb data for
-        discovery endpoints.
-        """
+                # Prepare basic movie data for storage
+                movie_data = {
+                    "tmdb_id": str(tmdb_id),
+                    "title": tmdb_movie_data.get("title", ""),
+                    "original_title": tmdb_movie_data.get("original_title", ""),
+                    "overview": tmdb_movie_data.get("overview", ""),
+                    "release_date": self._parse_date(
+                        tmdb_movie_data.get("release_date")
+                    ),
+                    "adult": tmdb_movie_data.get("adult", False),
+                    "popularity": tmdb_movie_data.get("popularity", 0.0),
+                    "vote_average": tmdb_movie_data.get("vote_average", 0.0),
+                    "vote_count": tmdb_movie_data.get("vote_count", 0),
+                    "original_language": tmdb_movie_data.get("original_language", "en"),
+                    "poster_path": tmdb_movie_data.get("poster_path") or "",
+                    "backdrop_path": tmdb_movie_data.get("backdrop_path") or "",
+                    # Set defaults for fields not available in list data
+                    "runtime": None,
+                    "budget": 0,
+                    "revenue": 0,
+                    "homepage": "",
+                    # ← REMOVED imdb_id completely - let it default to NULL
+                    "tagline": "",
+                    "main_trailer_key": None,
+                    "main_trailer_site": "YouTube",
+                    "status": MovieStatus.RELEASED,
+                    "sync_status": "partial",
+                    "last_synced": timezone.now(),
+                    "is_active": True,
+                }
+
+                # Create movie
+                movie = Movie.objects.create(**movie_data)
+
+                # Store genres if available
+                genre_ids = tmdb_movie_data.get("genre_ids", [])
+                if genre_ids:
+                    self._sync_movie_genres(movie, genre_ids)
+
+                logger.info(f"Stored basic movie: {movie.title} (ID: {movie.id})")
+                return movie
+
+        except Exception as e:
+            logger.error(f"Failed to store basic movie {tmdb_id}: {str(e)}")
+            return None
+
+    def _format_movie_list_results(
+        self, tmdb_results: Dict, store_movies: bool = False
+    ) -> Dict[str, Any]:
+        """Format movie list results from TMDb with optional storage."""
         results = []
 
         for tmdb_movie in tmdb_results.get("results", []):
+            # Get the TMDb ID (could be "id" or "tmdb_id")
+            tmdb_id = tmdb_movie.get("tmdb_id") or tmdb_movie.get("id")
+
+            # If store_movies is True, try to sync to database
+            if store_movies and tmdb_id:
+                try:
+                    # Check if movie already exists
+                    existing_movie = self.get_movie_by_tmdb_id(tmdb_id)
+
+                    if not existing_movie:
+                        # Store the movie in database
+                        logger.info(f"Storing movie {tmdb_id} in database")
+                        stored_movie = self._store_basic_movie(tmdb_movie)
+
+                        if stored_movie:
+                            # Use stored movie data
+                            results.append(self._format_movie_basic(stored_movie))
+                            continue
+                    else:
+                        # Use existing movie
+                        results.append(self._format_movie_basic(existing_movie))
+                        continue
+
+                except Exception as e:
+                    logger.warning(f"Failed to store movie {tmdb_id}: {e}")
+                    # Fall back to TMDb formatting
+
+            # Use TMDb data directly (fallback or when store_movies=False)
             results.append(self._format_tmdb_movie_basic(tmdb_movie))
 
         return {
@@ -821,9 +902,9 @@ class MovieService:
             "vote_count": tmdb_movie.get("vote_count", 0),
             "rating_stars": round(tmdb_movie.get("vote_average", 0.0) / 2, 1),
             "poster_url": tmdb_movie.get("poster_url"),
-            "backdrop_url": tmdb_movie.get("backdrop_url"),  # This should work!
-            "genres": [],  # Would need to be populated from genre_ids
-            "is_local": False,  # Indicates this is TMDb data, not local
+            "backdrop_url": tmdb_movie.get("backdrop_url"),
+            "genres": [],
+            "is_local": False,
         }
 
     def _parse_date(self, date_string: str) -> Optional[date]:
