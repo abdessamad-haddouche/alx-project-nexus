@@ -8,6 +8,7 @@ from typing import Dict, List
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.core.cache import cache
@@ -20,15 +21,143 @@ from core.responses import APIResponse
 
 logger = logging.getLogger(__name__)
 
+
+class BaseMovieRelationshipView(APIView):
+    """Base class for movie relationship views with shared functionality."""
+
+    permission_classes = [AllowAny]
+
+    def __init__(self):
+        super().__init__()
+        self.movie_service = MovieService()
+
+    def _parse_parameters(self, request, default_limit=10, default_rating=6.0) -> Dict:
+        """Parse and validate request parameters."""
+        try:
+            limit = min(int(request.query_params.get("limit", default_limit)), 50)
+            min_rating = float(request.query_params.get("min_rating", default_rating))
+            force_sync = (
+                request.query_params.get("force_sync", "false").lower() == "true"
+            )
+
+            # Validate
+            if limit < 1:
+                return APIResponse.validation_error(
+                    "Invalid limit", {"limit": ["Must be at least 1"]}
+                )
+
+            if min_rating < 0 or min_rating > 10:
+                return APIResponse.validation_error(
+                    "Invalid min_rating", {"min_rating": ["Must be between 0 and 10"]}
+                )
+
+            return {
+                "limit": limit,
+                "min_rating": min_rating,
+                "force_sync": force_sync,
+            }
+
+        except ValueError:
+            return APIResponse.validation_error("Invalid parameter values")
+
+    def _get_or_sync_movie(self, pk) -> Movie:
+        """Get movie by ID or sync from TMDb if not found."""
+        # Try database ID first
+        try:
+            movie = Movie.objects.get(pk=pk, is_active=True)
+            logger.info(f"Movie found by DB ID: {movie.title}")
+            return movie
+        except (Movie.DoesNotExist, ValueError):
+            pass
+
+        # Try TMDb ID
+        try:
+            movie = Movie.objects.get(tmdb_id=pk, is_active=True)
+            logger.info(f"Movie found by TMDb ID: {movie.title}")
+            return movie
+        except (Movie.DoesNotExist, ValueError):
+            pass
+
+        # Try to sync from TMDb
+        try:
+            movie = self.movie_service.sync_movie_from_tmdb(pk)
+            if movie:
+                logger.info(f"Movie synced from TMDb: {movie.title}")
+                return movie
+        except Exception as e:
+            logger.error(f"Failed to sync movie {pk}: {e}")
+
+        return APIResponse.not_found(
+            f"Movie with ID {pk} not found",
+            {"searched_id": pk, "suggestion": "Verify the movie ID is correct"},
+        )
+
+    def _get_or_store_movie(self, tmdb_id: int, tmdb_data: Dict = None) -> Movie:
+        """Get existing movie or store from TMDb data/API."""
+        # Check if movie exists
+        movie = self.movie_service.get_movie_by_tmdb_id(tmdb_id)
+        if movie:
+            return movie
+
+        if tmdb_data:
+            try:
+                stored_movie = self.movie_service._store_basic_movie(tmdb_data)
+                if stored_movie:
+                    logger.info(f"Stored movie from data: {stored_movie.title}")
+                    return stored_movie
+            except Exception as e:
+                logger.warning(f"Failed to store movie from data: {e}")
+
+        try:
+            synced_movie = self.movie_service.sync_movie_from_tmdb(tmdb_id)
+            if synced_movie:
+                logger.info(f"Synced movie from TMDb: {synced_movie.title}")
+                return synced_movie
+        except Exception as e:
+            logger.warning(f"Failed to sync movie {tmdb_id}: {e}")
+
+        return None
+
+    def _passes_filters(self, movie: Movie, params: Dict) -> bool:
+        """Check if movie passes quality filters."""
+        return (
+            movie.vote_average >= params["min_rating"]
+            and movie.vote_count >= 10  # Minimum votes for reliability
+        )
+
+    def _format_movie_basic(self, movie: Movie) -> Dict:
+        """Format basic movie info."""
+        return {
+            "id": movie.id,
+            "tmdb_id": movie.tmdb_id,
+            "title": movie.title,
+            "release_year": movie.release_year,
+            "vote_average": movie.vote_average,
+            "poster_url": movie.get_poster_url("w185") if movie.poster_path else None,
+        }
+
+    def _build_cache_key(self, endpoint: str, pk: int, params: Dict) -> str:
+        """Build cache key from parameters."""
+        import hashlib
+
+        key_parts = [
+            endpoint,
+            str(pk),
+            str(params["limit"]),
+            str(params["min_rating"]),
+        ]
+        key_string = "|".join(key_parts)
+        hash_key = hashlib.md5(key_string.encode()).hexdigest()[:8]
+        return f"movie_{endpoint}:{hash_key}"
+
+
 # =========================================================================
 # MOVIE RECOMMENDATIONS VIEW
 # =========================================================================
 
 
-class MovieRecommendationsView(APIView):
-    """
-    Get movie recommendations based on a specific movie.
-    """
+class MovieRecommendationsView(BaseMovieRelationshipView):
+    """Get movie recommendations with automatic storage."""
 
     permission_classes = [AllowAny]
     movie_service = MovieService()
@@ -36,311 +165,110 @@ class MovieRecommendationsView(APIView):
 
     @extend_schema(
         summary="Get movie recommendations",
-        description="""
-        Get personalized movie recommendations based on a specific movie.
-
-        **Data Strategy:**
-        1. Check local database for stored recommendations first
-        2. Fall back to TMDb API for fresh recommendations
-        3. Store quality recommendations in database
-        4. Apply smart filtering and ranking
-
-        **Filters:**
-        - Minimum rating: 6.0+
-        - Minimum votes: 50+
-        - Active movies only
-        - No adult content (unless requested)
-        """,
+        description="Get personalized movie recommendations based on a specific movie",
         parameters=[
             OpenApiParameter(
-                name="limit",
-                description="Maximum number of recommendations (default: 10, max: 50)",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Default Limit", value=10),
-                    OpenApiExample("More Results", value=20),
-                    OpenApiExample("Maximum", value=50),
-                ],
+                "limit",
+                OpenApiTypes.INT,
+                description="Max recommendations (default: 10, max: 50)",
             ),
             OpenApiParameter(
-                name="include_adult",
-                description="Include adult content in recommendations (default: false)",
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("No Adult Content", value=False),
-                    OpenApiExample("Include Adult", value=True),
-                ],
+                "min_rating",
+                OpenApiTypes.NUMBER,
+                description="Minimum rating 0-10 (default: 6.0)",
             ),
             OpenApiParameter(
-                name="min_rating",
-                description="Minimum vote average for recommendations (default: 6.0)",
-                type=OpenApiTypes.NUMBER,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Default Quality", value=6.0),
-                    OpenApiExample("High Quality", value=7.5),
-                    OpenApiExample("Premium Quality", value=8.0),
-                ],
-            ),
-            OpenApiParameter(
-                name="force_sync",
-                description="Force fresh data from TMDb API and store in database (default: false)",
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Use Cache/DB", value=False),
-                    OpenApiExample("Force TMDb API", value=True),
-                ],
+                "force_sync",
+                OpenApiTypes.BOOL,
+                description="Skip cache and get fresh data",
             ),
         ],
-        responses={
-            200: MovieSimpleSerializer(many=True),
-            404: None,
-            400: None,
-            500: None,
-        },
+        responses={200: MovieSimpleSerializer(many=True)},
         tags=["Movies - Relationships"],
     )
-    def get(self, request, pk):
-        """Get movie recommendations with intelligent fallback strategy."""
+    def get(self, request, pk) -> Response:
+        """Get movie recommendations with smart storage."""
         try:
-            # Parse parameters first
-            limit = min(int(request.query_params.get("limit", 10)), 50)
-            include_adult = (
-                request.query_params.get("include_adult", "false").lower() == "true"
-            )
-            min_rating = float(request.query_params.get("min_rating", 6.0))
-            force_sync = (
-                request.query_params.get("force_sync", "false").lower() == "true"
-            )
+            # Parse and validate parameters
+            params = self._parse_parameters(request)
+            if isinstance(params, Response):
+                return params
 
-            # Validate parameters
-            if limit < 1:
-                return APIResponse.validation_error(
-                    message="Invalid limit",
-                    field_errors={"limit": ["Must be at least 1"]},
-                )
-
-            if min_rating < 0 or min_rating > 10:
-                return APIResponse.validation_error(
-                    message="Invalid minimum rating",
-                    field_errors={"min_rating": ["Must be between 0 and 10"]},
-                )
-
-            # Check cache first (unless force sync)
-            cache_key = (
-                f"movie_recommendations_{pk}_{limit}_{include_adult}_{min_rating}"
-            )
-            if not force_sync:
+            # Check cache unless force_sync
+            if not params["force_sync"]:
+                cache_key = self._build_cache_key("recommendations", pk, params)
                 cached_data = cache.get(cache_key)
                 if cached_data:
-                    logger.info(
-                        f"Movie recommendations for ID {pk} retrieved from cache"
-                    )
-                    return APIResponse.success(
-                        message=f"Found {len(cached_data['recommendations'])} recommendations (cached)",
-                        data=cached_data,
-                    )
+                    return APIResponse.success("Recommendations (cached)", cached_data)
 
-            # Step 1: Try to get movie from local database or sync from TMDb
-            try:
-                movie = Movie.objects.get(pk=pk, is_active=True)
-                logger.info(f"Movie found in database: {movie.title}")
-            except Movie.DoesNotExist:
-                # Try by tmdb_id
-                try:
-                    movie = Movie.objects.get(tmdb_id=pk, is_active=True)
-                    logger.info(f"Movie found by TMDb ID: {movie.title}")
-                except Movie.DoesNotExist:
-                    # Try to sync from TMDb
-                    logger.info(f"Attempting to sync movie from TMDb with ID: {pk}")
-                    try:
-                        movie = self.movie_service.sync_movie_from_tmdb(pk)
-                        if not movie:
-                            return APIResponse.not_found(
-                                message=f"Movie with ID {pk} not found",
-                                extra_data={"searched_id": pk},
-                            )
-                        logger.info(f"Successfully synced movie: {movie.title}")
-                    except Exception as e:
-                        logger.error(f"Failed to sync movie {pk}: {e}")
-                        return APIResponse.server_error(
-                            message="Failed to find or sync movie",
-                            extra_data={"searched_id": pk},
-                        )
+            # Get or sync movie
+            movie = self._get_or_sync_movie(pk)
+            if isinstance(movie, Response):
+                return movie
 
-            # Step 2: Get recommendations
-            try:
-                if force_sync:
-                    # Force sync: Get fresh data from TMDb API
-                    logger.info(
-                        f"Force sync enabled - getting fresh recommendations from TMDb for {movie.title}"
-                    )
-                    tmdb_recommendations = (
-                        self.movie_service.tmdb.movies.get_recommendations(
-                            movie_id=movie.tmdb_id, page=1
-                        )
-                    )
+            # Get recommendations with storage
+            recommendations = self._get_recommendations_with_storage(movie, params)
 
-                    recommendations = []
-                    if tmdb_recommendations and tmdb_recommendations.get("results"):
-                        # Process TMDb results and sync movies to database
-                        for rec_data in tmdb_recommendations.get("results", [])[
-                            : limit * 2
-                        ]:
-                            rec_tmdb_id = rec_data.get("tmdb_id")
-                            if rec_tmdb_id:
-                                try:
-                                    # Try to get existing movie or sync from TMDb
-                                    rec_movie = self.movie_service.get_movie_by_tmdb_id(
-                                        rec_tmdb_id
-                                    )
-                                    if not rec_movie:
-                                        rec_movie = (
-                                            self.movie_service.sync_movie_from_tmdb(
-                                                rec_tmdb_id
-                                            )
-                                        )
-                                    if rec_movie:
-                                        recommendations.append(rec_movie)
-                                except Exception as e:
-                                    logger.warning(
-                                        f"Failed to sync recommended movie {rec_tmdb_id}: {e}"
-                                    )
+            # Build response
+            response_data = {
+                "source_movie": self._format_movie_basic(movie),
+                "recommendations": MovieSimpleSerializer(
+                    recommendations, many=True
+                ).data,
+                "total_count": len(recommendations),
+                "filters_applied": {
+                    "min_rating": params["min_rating"],
+                    "limit": params["limit"],
+                },
+                "data_source": "TMDb API + Local Storage",
+                "fetched_at": timezone.now().isoformat(),
+            }
 
-                    data_source = "TMDb API (Force Sync)"
-                else:
-                    # Normal flow: Try local DB first, fallback to TMDb if needed
-                    recommendations = (
-                        self.recommendation_service.get_recommendations_for_movie(
-                            movie_id=movie.id, limit=limit * 2
-                        )
-                    )
-
-                    if not recommendations:
-                        logger.info(
-                            f"No local recommendations found, fetching from TMDb for {movie.title}"
-                        )
-                        tmdb_recommendations = (
-                            self.movie_service.tmdb.movies.get_recommendations(
-                                movie_id=movie.tmdb_id, page=1
-                            )
-                        )
-
-                        recommendations = []
-                        if tmdb_recommendations and tmdb_recommendations.get("results"):
-                            for rec_data in tmdb_recommendations.get("results", [])[
-                                : limit * 2
-                            ]:
-                                rec_tmdb_id = rec_data.get("tmdb_id")
-                                if rec_tmdb_id:
-                                    try:
-                                        rec_movie = (
-                                            self.movie_service.get_movie_by_tmdb_id(
-                                                rec_tmdb_id
-                                            )
-                                        )
-                                        if not rec_movie:
-                                            rec_movie = (
-                                                self.movie_service.sync_movie_from_tmdb(
-                                                    rec_tmdb_id
-                                                )
-                                            )
-                                        if rec_movie:
-                                            recommendations.append(rec_movie)
-                                    except Exception as e:
-                                        logger.warning(
-                                            f"Failed to sync recommended movie {rec_tmdb_id}: {e}"
-                                        )
-
-                        data_source = "TMDb API (Fallback)"
-                    else:
-                        data_source = "Local Database"
-
-                # Apply filters
-                filtered_recommendations = self._apply_recommendation_filters(
-                    recommendations, min_rating=min_rating, include_adult=include_adult
-                )[:limit]
-
-                # Format response data
-                response_data = {
-                    "source_movie": {
-                        "id": movie.id,
-                        "tmdb_id": movie.tmdb_id,
-                        "title": movie.title,
-                        "release_year": movie.release_year,
-                        "vote_average": movie.vote_average,
-                        "poster_url": movie.get_poster_url("w185"),
-                    },
-                    "recommendations": MovieSimpleSerializer(
-                        filtered_recommendations, many=True
-                    ).data,
-                    "total_count": len(filtered_recommendations),
-                    "filters_applied": {
-                        "min_rating": min_rating,
-                        "include_adult": include_adult,
-                        "limit": limit,
-                    },
-                    "data_source": data_source,
-                    "fetched_at": timezone.now().isoformat(),
-                    "force_sync": force_sync,
-                }
-
-                # Cache for 2 hours
+            # Cache for 2 hours
+            if not params["force_sync"]:
+                cache_key = self._build_cache_key("recommendations", pk, params)
                 cache.set(cache_key, response_data, 60 * 60 * 2)
 
-                logger.info(
-                    f"Generated {len(filtered_recommendations)} recommendations for {movie.title}"
-                )
-
-                return APIResponse.success(
-                    message=f"Found {len(filtered_recommendations)} recommendations for '{movie.title}'",
-                    data=response_data,
-                )
-
-            except Exception as e:
-                logger.error(f"Failed to get recommendations for movie {pk}: {e}")
-                return APIResponse.server_error(
-                    message="Recommendations temporarily unavailable",
-                    extra_data={"movie_title": movie.title},
-                )
-
-        except ValueError as e:
-            return APIResponse.validation_error(
-                message="Invalid parameter value", field_errors={"parameter": [str(e)]}
+            message = (
+                f"Found {len(recommendations)} recommendations for '{movie.title}'"
             )
+            return APIResponse.success(message, response_data)
+
         except Exception as e:
             logger.error(f"Movie recommendations error: {e}")
-            return APIResponse.server_error(message="Failed to get recommendations")
+            return APIResponse.server_error("Failed to get recommendations")
 
-    def _apply_recommendation_filters(
-        self, movies: List[Movie], min_rating: float, include_adult: bool
+    def _get_recommendations_with_storage(
+        self, movie: Movie, params: Dict
     ) -> List[Movie]:
-        """Apply quality and content filters to recommendations."""
-        filtered = []
+        """Get recommendations from TMDb and store missing movies."""
+        try:
+            # Get TMDb recommendations
+            tmdb_data = self.movie_service.tmdb.movies.get_recommendations(
+                movie_id=movie.tmdb_id, page=1
+            )
 
-        for movie in movies:
-            # Skip adult content
-            if not include_adult and movie.adult:
-                continue
+            recommendations = []
 
-            # Apply rating filter
-            if movie.vote_average < min_rating:
-                continue
+            if tmdb_data and tmdb_data.get("results"):
+                for rec_data in tmdb_data["results"][: params["limit"] * 2]:
+                    rec_tmdb_id = rec_data.get("tmdb_id") or rec_data.get("id")
 
-            # Ensure minimum vote count for reliability
-            if movie.vote_count < 20:
-                continue
+                    if rec_tmdb_id:
+                        # Get existing or store new movie
+                        rec_movie = self._get_or_store_movie(rec_tmdb_id, rec_data)
 
-            filtered.append(movie)
+                        if rec_movie and self._passes_filters(rec_movie, params):
+                            recommendations.append(rec_movie)
 
-        return filtered
+                            if len(recommendations) >= params["limit"]:
+                                break
+
+            return recommendations
+
+        except Exception as e:
+            logger.error(f"Failed to get recommendations with storage: {e}")
+            return []
 
 
 # =========================================================================
@@ -348,10 +276,8 @@ class MovieRecommendationsView(APIView):
 # =========================================================================
 
 
-class SimilarMoviesView(APIView):
-    """
-    Get movies similar to a specific movie.
-    """
+class SimilarMoviesView(BaseMovieRelationshipView):
+    """Get similar movies with automatic storage."""
 
     permission_classes = [AllowAny]
     movie_service = MovieService()
@@ -359,363 +285,112 @@ class SimilarMoviesView(APIView):
 
     @extend_schema(
         summary="Get similar movies",
-        description="""
-        Get movies similar to a specific movie based on multiple similarity factors.
-
-        **Data Strategy:**
-        1. Check local database for TMDb similar movies
-        2. Supplement with genre-based similar movies
-        3. Fall back to TMDb API if needed
-        4. Store quality similar movies in database
-        """,
+        description="Get movies similar to a specific movie based on TMDb algorithm",
         parameters=[
             OpenApiParameter(
-                name="limit",
-                description="Maximum number of similar movies (default: 12, max: 50)",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Default Grid", value=12),
-                    OpenApiExample("Extended List", value=24),
-                    OpenApiExample("Maximum", value=50),
-                ],
+                "limit",
+                OpenApiTypes.INT,
+                description="Max similar movies (default: 12, max: 50)",
             ),
             OpenApiParameter(
-                name="similarity_threshold",
-                description="Minimum similarity score (0.0-1.0, default: 0.3)",
-                type=OpenApiTypes.NUMBER,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Loose Similarity", value=0.2),
-                    OpenApiExample("Default", value=0.3),
-                    OpenApiExample("High Similarity", value=0.6),
-                ],
+                "min_rating",
+                OpenApiTypes.NUMBER,
+                description="Minimum rating 0-10 (default: 5.0)",
             ),
             OpenApiParameter(
-                name="include_older",
-                description="Include movies older than 10 years (default: true)",
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Include Classics", value=True),
-                    OpenApiExample("Recent Only", value=False),
-                ],
-            ),
-            OpenApiParameter(
-                name="force_sync",
-                description="Force fresh data from TMDb API (default: false)",
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Use Cache/DB", value=False),
-                    OpenApiExample("Force TMDb API", value=True),
-                ],
+                "force_sync",
+                OpenApiTypes.BOOL,
+                description="Skip cache and get fresh data",
             ),
         ],
-        responses={
-            200: MovieSimpleSerializer(many=True),
-            404: None,
-            400: None,
-            500: None,
-        },
+        responses={200: MovieSimpleSerializer(many=True)},
         tags=["Movies - Relationships"],
     )
-    def get(self, request, pk):
-        """Get similar movies with multi-algorithm approach."""
+    def get(self, request, pk) -> Response:
+        """Get similar movies with smart storage."""
         try:
-            # Parse parameters first
-            limit = min(int(request.query_params.get("limit", 12)), 50)
-            similarity_threshold = float(
-                request.query_params.get("similarity_threshold", 0.3)
+            # Parse and validate parameters
+            params = self._parse_parameters(
+                request, default_limit=12, default_rating=5.0
             )
-            include_older = (
-                request.query_params.get("include_older", "true").lower() == "true"
-            )
-            force_sync = (
-                request.query_params.get("force_sync", "false").lower() == "true"
-            )
+            if isinstance(params, Response):
+                return params
 
-            # Validate parameters
-            if limit < 1:
-                return APIResponse.validation_error(
-                    message="Invalid limit",
-                    field_errors={"limit": ["Must be at least 1"]},
-                )
-
-            if similarity_threshold < 0 or similarity_threshold > 1:
-                return APIResponse.validation_error(
-                    message="Invalid similarity threshold",
-                    field_errors={
-                        "similarity_threshold": ["Must be between 0.0 and 1.0"]
-                    },
-                )
-
-            # Check cache first (unless force sync)
-            cache_key = (
-                f"similar_movies_{pk}_{limit}_{similarity_threshold}_{include_older}"
-            )
-            if not force_sync:
+            # Check cache unless force_sync
+            if not params["force_sync"]:
+                cache_key = self._build_cache_key("similar", pk, params)
                 cached_data = cache.get(cache_key)
                 if cached_data:
-                    logger.info(f"Similar movies for ID {pk} retrieved from cache")
-                    return APIResponse.success(
-                        message=f"Found {len(cached_data['similar_movies'])} similar movies (cached)",
-                        data=cached_data,
-                    )
+                    return APIResponse.success("Similar movies (cached)", cached_data)
 
-            # Step 1: Try to get movie from local database or sync from TMDb
-            try:
-                movie = Movie.objects.get(pk=pk, is_active=True)
-                logger.info(f"Movie found in database: {movie.title}")
-            except Movie.DoesNotExist:
-                # Try by tmdb_id
-                try:
-                    movie = Movie.objects.get(tmdb_id=pk, is_active=True)
-                    logger.info(f"Movie found by TMDb ID: {movie.title}")
-                except Movie.DoesNotExist:
-                    # Try to sync from TMDb
-                    logger.info(f"Attempting to sync movie from TMDb with ID: {pk}")
-                    try:
-                        movie = self.movie_service.sync_movie_from_tmdb(pk)
-                        if not movie:
-                            return APIResponse.not_found(
-                                message=f"Movie with ID {pk} not found",
-                                extra_data={"searched_id": pk},
-                            )
-                        logger.info(f"Successfully synced movie: {movie.title}")
-                    except Exception as e:
-                        logger.error(f"Failed to sync movie {pk}: {e}")
-                        return APIResponse.server_error(
-                            message="Failed to find or sync movie",
-                            extra_data={"searched_id": pk},
-                        )
+            # Get or sync movie
+            movie = self._get_or_sync_movie(pk)
+            if isinstance(movie, Response):
+                return movie
 
-            # Step 2: Get similar movies
-            try:
-                if force_sync:
-                    # Get fresh data from TMDb API
-                    logger.info(
-                        f"Force sync enabled - getting fresh similar movies from TMDb for {movie.title}"
-                    )
-                    tmdb_similar = self.movie_service.tmdb.movies.get_similar(
-                        movie_id=movie.tmdb_id, page=1
-                    )
+            # Get similar movies with storage
+            similar_movies = self._get_similar_with_storage(movie, params)
 
-                    similar_movies = []
-                    if tmdb_similar and tmdb_similar.get("results"):
-                        # Process TMDb results and sync movies to database
-                        for similar_data in tmdb_similar.get("results", [])[
-                            : limit * 2
-                        ]:
-                            similar_tmdb_id = similar_data.get("tmdb_id")
-                            if similar_tmdb_id:
-                                try:
-                                    # Try to get existing movie or sync from TMDb
-                                    similar_movie = (
-                                        self.movie_service.get_movie_by_tmdb_id(
-                                            similar_tmdb_id
-                                        )
-                                    )
-                                    if not similar_movie:
-                                        similar_movie = (
-                                            self.movie_service.sync_movie_from_tmdb(
-                                                similar_tmdb_id
-                                            )
-                                        )
-                                    if similar_movie:
-                                        similar_movies.append(similar_movie)
-                                except Exception as e:
-                                    logger.warning(
-                                        f"Failed to sync similar movie {similar_tmdb_id}: {e}"
-                                    )
+            # Build response
+            response_data = {
+                "source_movie": self._format_movie_basic(movie),
+                "similar_movies": MovieSimpleSerializer(similar_movies, many=True).data,
+                "total_count": len(similar_movies),
+                "filters_applied": {
+                    "min_rating": params["min_rating"],
+                    "limit": params["limit"],
+                },
+                "data_source": "TMDb API + Local Storage",
+                "fetched_at": timezone.now().isoformat(),
+            }
 
-                    data_source = "TMDb API (Force Sync)"
-                else:
-                    # Normal flow: Try local DB first, fallback to TMDb if needed
-                    similar_movies = self.recommendation_service.get_similar_movies(
-                        movie_id=movie.id, limit=limit * 2
-                    )
-
-                    if not similar_movies:
-                        logger.info(
-                            f"No local similar movies found, fetching from TMDb for {movie.title}"
-                        )
-                        tmdb_similar = self.movie_service.tmdb.movies.get_similar(
-                            movie_id=movie.tmdb_id, page=1
-                        )
-
-                        similar_movies = []
-                        if tmdb_similar and tmdb_similar.get("results"):
-                            for similar_data in tmdb_similar.get("results", [])[
-                                : limit * 2
-                            ]:
-                                similar_tmdb_id = similar_data.get("tmdb_id")
-                                if similar_tmdb_id:
-                                    try:
-                                        similar_movie = (
-                                            self.movie_service.get_movie_by_tmdb_id(
-                                                similar_tmdb_id
-                                            )
-                                        )
-                                        if not similar_movie:
-                                            similar_movie = (
-                                                self.movie_service.sync_movie_from_tmdb(
-                                                    similar_tmdb_id
-                                                )
-                                            )
-                                        if similar_movie:
-                                            similar_movies.append(similar_movie)
-                                    except Exception as e:
-                                        logger.warning(
-                                            f"Failed to sync similar movie {similar_tmdb_id}: {e}"
-                                        )
-
-                        data_source = "TMDb API (Fallback)"
-                    else:
-                        data_source = "Local Database"
-
-                # Apply filters and ranking
-                filtered_similar = self._apply_similarity_filters(
-                    similar_movies,
-                    target_movie=movie,
-                    threshold=similarity_threshold,
-                    include_older=include_older,
-                )[:limit]
-
-                # Format response data
-                response_data = {
-                    "source_movie": {
-                        "id": movie.id,
-                        "tmdb_id": movie.tmdb_id,
-                        "title": movie.title,
-                        "release_year": movie.release_year,
-                        "vote_average": movie.vote_average,
-                        "genres": [
-                            genre.name for genre in movie.genres.filter(is_active=True)
-                        ],
-                        "poster_url": movie.get_poster_url("w185"),
-                    },
-                    "similar_movies": MovieSimpleSerializer(
-                        filtered_similar, many=True
-                    ).data,
-                    "total_count": len(filtered_similar),
-                    "similarity_factors": [
-                        "TMDb similarity algorithm",
-                        "Shared genres",
-                        "Similar ratings",
-                        "Release period proximity",
-                    ],
-                    "filters_applied": {
-                        "similarity_threshold": similarity_threshold,
-                        "include_older": include_older,
-                        "limit": limit,
-                    },
-                    "data_source": data_source,
-                    "fetched_at": timezone.now().isoformat(),
-                    "force_sync": force_sync,
-                }
-
-                # Cache for 4 hours (similar movies change less frequently)
+            # Cache for 4 hours
+            if not params["force_sync"]:
+                cache_key = self._build_cache_key("similar", pk, params)
                 cache.set(cache_key, response_data, 60 * 60 * 4)
 
-                logger.info(
-                    f"Found {len(filtered_similar)} similar movies for {movie.title}"
-                )
+            message = f"Found {len(similar_movies)} movies similar to '{movie.title}'"
+            return APIResponse.success(message, response_data)
 
-                return APIResponse.success(
-                    message=f"Found {len(filtered_similar)} movies similar to '{movie.title}'",
-                    data=response_data,
-                )
-
-            except Exception as e:
-                logger.error(f"Failed to get similar movies for {pk}: {e}")
-                return APIResponse.server_error(
-                    message="Similar movies temporarily unavailable",
-                    extra_data={"movie_title": movie.title},
-                )
-
-        except ValueError as e:
-            return APIResponse.validation_error(
-                message="Invalid parameter value", field_errors={"parameter": [str(e)]}
-            )
         except Exception as e:
             logger.error(f"Similar movies error: {e}")
-            return APIResponse.server_error(message="Failed to get similar movies")
+            return APIResponse.server_error("Failed to get similar movies")
 
-    def _apply_similarity_filters(
-        self,
-        movies: List[Movie],
-        target_movie: Movie,
-        threshold: float,
-        include_older: bool,
-    ) -> List[Movie]:
-        """Apply similarity filters and ranking."""
-        from datetime import date
-
-        filtered = []
-        current_year = date.today().year
-
-        for movie in movies:
-            # Calculate basic similarity score (simplified)
-            similarity_score = self._calculate_similarity_score(movie, target_movie)
-
-            if similarity_score < threshold:
-                continue
-
-            # Age filter
-            if not include_older and movie.release_date:
-                if movie.release_date.year < (current_year - 10):
-                    continue
-
-            # Quality filter
-            if movie.vote_average < 5.0 or movie.vote_count < 10:
-                continue
-
-            filtered.append(movie)
-
-        # Sort by similarity score (simplified - would be more complex in production)
-        return sorted(
-            filtered,
-            key=lambda m: (
-                self._calculate_similarity_score(m, target_movie),
-                m.vote_average,
-                m.popularity,
-            ),
-            reverse=True,
-        )
-
-    def _calculate_similarity_score(self, movie1: Movie, movie2: Movie) -> float:
-        """Calculate basic similarity score between two movies."""
-        score = 0.0
-
-        # Genre overlap
-        movie1_genres = set(movie1.genres.values_list("tmdb_id", flat=True))
-        movie2_genres = set(movie2.genres.values_list("tmdb_id", flat=True))
-
-        if movie1_genres and movie2_genres:
-            genre_overlap = len(movie1_genres & movie2_genres) / len(
-                movie1_genres | movie2_genres
+    def _get_similar_with_storage(self, movie: Movie, params: Dict) -> List[Movie]:
+        """Get similar movies from TMDb and store missing movies."""
+        try:
+            # Get TMDb similar movies
+            tmdb_data = self.movie_service.tmdb.movies.get_similar(
+                movie_id=movie.tmdb_id, page=1
             )
-            score += genre_overlap * 0.4
 
-        # Rating similarity
-        if movie1.vote_average > 0 and movie2.vote_average > 0:
-            rating_diff = abs(movie1.vote_average - movie2.vote_average)
-            rating_similarity = max(0, 1 - (rating_diff / 10))
-            score += rating_similarity * 0.3
+            similar_movies = []
 
-        # Popularity similarity
-        if movie1.popularity > 0 and movie2.popularity > 0:
-            pop_ratio = min(movie1.popularity, movie2.popularity) / max(
-                movie1.popularity, movie2.popularity
-            )
-            score += pop_ratio * 0.3
+            if tmdb_data and tmdb_data.get("results"):
+                for similar_data in tmdb_data["results"][: params["limit"] * 2]:
+                    similar_tmdb_id = similar_data.get("tmdb_id") or similar_data.get(
+                        "id"
+                    )
 
-        return min(score, 1.0)
+                    if similar_tmdb_id:
+                        # Get existing or store new movie
+                        similar_movie = self._get_or_store_movie(
+                            similar_tmdb_id, similar_data
+                        )
+
+                        if similar_movie and self._passes_filters(
+                            similar_movie, params
+                        ):
+                            similar_movies.append(similar_movie)
+
+                            if len(similar_movies) >= params["limit"]:
+                                break
+
+            return similar_movies
+
+        except Exception as e:
+            logger.error(f"Failed to get similar movies with storage: {e}")
+            return []
 
 
 # =========================================================================
