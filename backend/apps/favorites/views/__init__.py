@@ -3,6 +3,7 @@ Favorite Views Package
 """
 
 from .favorite_views import (
+    FavoriteCreateByTMDbView,
     FavoriteCreateView,
     FavoriteDeleteView,
     FavoriteDetailView,
@@ -19,6 +20,7 @@ __all__ = [
     "FavoriteListView",
     "FavoriteDetailView",
     "FavoriteCreateView",
+    "FavoriteCreateByTMDbView",
     "FavoriteUpdateView",
     "FavoriteDeleteView",
     "FavoriteToggleView",

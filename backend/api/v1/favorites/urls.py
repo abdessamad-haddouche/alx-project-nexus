@@ -6,6 +6,7 @@ Handles user favorites, watchlist, ratings, and recommendation analytics.
 from django.urls import path
 
 from apps.favorites.views import (
+    FavoriteCreateByTMDbView,
     FavoriteCreateView,
     FavoriteDeleteView,
     FavoriteDetailView,
@@ -27,6 +28,7 @@ urlpatterns = [
     # Favorite CRUD operations
     path("", FavoriteListView.as_view(), name="list"),
     path("create/", FavoriteCreateView.as_view(), name="create"),
+    path("tmdb/create/", FavoriteCreateByTMDbView.as_view(), name="create-by-tmdb"),
     path("<int:pk>/", FavoriteDetailView.as_view(), name="detail"),
     path("<int:pk>/update/", FavoriteUpdateView.as_view(), name="update"),
     path("<int:pk>/delete/", FavoriteDeleteView.as_view(), name="delete"),

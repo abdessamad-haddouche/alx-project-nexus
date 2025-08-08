@@ -16,6 +16,7 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 
 from apps.favorites.models import Favorite
 from apps.favorites.serializers import (
+    FavoriteCreateByTMDbSerializer,
     FavoriteCreateSerializer,
     FavoriteListSerializer,
     FavoriteSerializer,
@@ -26,7 +27,11 @@ from apps.favorites.serializers import (
     WatchlistSerializer,
 )
 from apps.favorites.services import FavoriteService
-from core.exceptions import NotFoundException, ValidationException
+from core.exceptions import (
+    MovieNotFoundException,
+    NotFoundException,
+    ValidationException,
+)
 from core.responses import APIResponse
 
 logger = logging.getLogger(__name__)
@@ -292,6 +297,87 @@ class FavoriteCreateView(APIView):
 
         except Exception as e:
             logger.error(f"Error in favorite create view: {e}")
+            return APIResponse.server_error(message="Failed to add favorite")
+
+
+class FavoriteCreateByTMDbView(APIView):
+    """Add movie to favorites using TMDb ID."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Add movie to favorites by TMDb ID",
+        description="Add a movie to user's favorites using TMDb ID. Creates movie in database if it doesn't exist.",
+        request=FavoriteCreateByTMDbSerializer,
+        responses={
+            201: FavoriteSerializer,
+            400: None,
+            401: None,
+            404: None,
+            409: None,
+            500: None,
+        },
+        examples=[
+            OpenApiExample(
+                "Add Batman Begins",
+                value={
+                    "tmdb_id": "1892",
+                    "user_rating": 8,
+                    "notes": "Great origin story!",
+                    "is_watchlist": False,
+                },
+            ),
+            OpenApiExample(
+                "Add to Watchlist", value={"tmdb_id": "550", "is_watchlist": True}
+            ),
+            OpenApiExample("Simple Add", value={"tmdb_id": "27205"}),
+        ],
+        tags=["Favorites - User"],
+    )
+    def post(self, request) -> Response:
+        """Add movie to favorites by TMDb ID."""
+        try:
+            serializer = FavoriteCreateByTMDbSerializer(
+                data=request.data, context={"request": request}
+            )
+
+            if not serializer.is_valid():
+                return APIResponse.validation_error(
+                    message="Invalid data provided", field_errors=serializer.errors
+                )
+
+            # Extract validated data
+            tmdb_id = serializer.validated_data["tmdb_id"]
+            user_rating = serializer.validated_data.get("user_rating")
+            notes = serializer.validated_data.get("notes", "")
+            is_watchlist = serializer.validated_data.get("is_watchlist", False)
+            recommendation_source = serializer.validated_data.get(
+                "recommendation_source"
+            )
+
+            try:
+                result = FavoriteService.add_favorite_by_tmdb_id(
+                    user=request.user,
+                    tmdb_id=tmdb_id,
+                    user_rating=user_rating,
+                    notes=notes,
+                    is_watchlist=is_watchlist,
+                    recommendation_source=recommendation_source,
+                )
+
+                return APIResponse.created(
+                    message=result["message"], data=result["favorite"]
+                )
+
+            except ValidationException as e:
+                return APIResponse.validation_error(
+                    message=str(e.detail), field_errors=e.field_errors
+                )
+            except MovieNotFoundException as e:
+                return APIResponse.not_found(message=str(e.detail))
+
+        except Exception as e:
+            logger.error(f"Error in favorite create by TMDb view: {e}")
             return APIResponse.server_error(message="Failed to add favorite")
 
 

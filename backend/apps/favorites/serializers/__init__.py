@@ -3,6 +3,7 @@ Favorites app serializers package.
 """
 
 from .favorite import (
+    FavoriteCreateByTMDbSerializer,
     FavoriteCreateSerializer,
     FavoriteListSerializer,
     FavoriteSerializer,
@@ -16,6 +17,7 @@ from .favorite import (
 __all__ = [
     "FavoriteSerializer",
     "FavoriteCreateSerializer",
+    "FavoriteCreateByTMDbSerializer",
     "FavoriteUpdateSerializer",
     "FavoriteListSerializer",
     "WatchlistSerializer",

@@ -174,6 +174,60 @@ class FavoriteCreateSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+class FavoriteCreateByTMDbSerializer(UserContextMixin, serializers.Serializer):
+    """
+    Serializer for creating favorites using TMDb ID.
+    """
+
+    tmdb_id = serializers.CharField(
+        max_length=20, help_text=_("TMDb movie ID (e.g., '550' for Fight Club)")
+    )
+    user_rating = serializers.IntegerField(
+        min_value=1,
+        max_value=10,
+        required=False,
+        help_text=_("User's personal rating (1-10 scale)"),
+    )
+    notes = serializers.CharField(
+        max_length=1000,
+        required=False,
+        allow_blank=True,
+        help_text=_("User's personal notes about this movie"),
+    )
+    is_watchlist = serializers.BooleanField(
+        default=False, help_text=_("Add to watchlist (want to watch)")
+    )
+    recommendation_source = serializers.CharField(
+        max_length=30,
+        required=False,
+        help_text=_("How user discovered this movie (for analytics)"),
+    )
+
+    def validate_tmdb_id(self, value):
+        """Validate TMDb ID format."""
+        if not value:
+            raise serializers.ValidationError(_("TMDb ID is required."))
+
+        try:
+            tmdb_id_int = int(value)
+            if tmdb_id_int <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise serializers.ValidationError(_("TMDb ID must be a positive integer."))
+
+        return str(tmdb_id_int)  # Normalize format
+
+    def validate_notes(self, value):
+        """Validate and clean notes."""
+        if value:
+            value = value.strip()
+            if len(value) > 1000:
+                raise serializers.ValidationError(
+                    _("Notes cannot exceed 1000 characters.")
+                )
+        return value
+
+
 class FavoriteUpdateSerializer(serializers.ModelSerializer):
     """
     Serializer for updating existing favorites.

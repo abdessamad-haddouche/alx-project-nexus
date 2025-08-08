@@ -148,6 +148,83 @@ class FavoriteService:
             "message": _("Favorite updated successfully."),
         }
 
+    @staticmethod
+    def add_favorite_by_tmdb_id(user: User, tmdb_id: str, **kwargs) -> Dict[str, Any]:
+        """Add a movie to user's favorites by TMDb ID (creates movie if needed)."""
+        # Validate TMDb ID format
+        try:
+            tmdb_id_int = int(tmdb_id)
+            if tmdb_id_int <= 0:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise ValidationException(
+                detail=_("Invalid TMDb ID format."),
+                field_errors={"tmdb_id": _("TMDb ID must be a positive integer.")},
+            )
+
+        tmdb_id = str(tmdb_id_int)
+
+        try:
+            movie = Movie.objects.get(tmdb_id=tmdb_id, is_active=True)
+        except Movie.DoesNotExist:
+            try:
+                movie = FavoriteService._get_or_create_movie_from_tmdb(tmdb_id)
+            except Exception as e:
+                raise MovieNotFoundException(
+                    detail=_("Could not fetch movie from TMDb."),
+                    extra_data={"tmdb_id": tmdb_id, "error": str(e)},
+                )
+
+        return FavoriteService.add_favorite(user, movie.id, **kwargs)
+
+    @staticmethod
+    def _get_or_create_movie_from_tmdb(tmdb_id: str) -> Movie:
+        """Fetch movie from TMDb API and create in database."""
+        from apps.movies.serializers import MovieCreateSerializer
+        from core.services.tmdb import tmdb_service
+
+        movie_data = tmdb_service.get_movie_details(int(tmdb_id))
+
+        if not movie_data:
+            raise MovieNotFoundException(
+                detail=_("Movie not found on TMDb."),
+                extra_data={"tmdb_id": tmdb_id},
+            )
+
+        movie_create_data = {
+            "tmdb_id": str(movie_data["tmdb_id"]),
+            "title": movie_data.get("title", ""),
+            "original_title": movie_data.get("original_title", ""),
+            "tagline": movie_data.get("tagline", ""),
+            "overview": movie_data.get("overview", ""),
+            "runtime": movie_data.get("runtime"),
+            "status": movie_data.get("status", "Released"),
+            "original_language": movie_data.get("original_language", "en"),
+            "release_date": movie_data.get("release_date"),
+            "budget": movie_data.get("budget", 0),
+            "revenue": movie_data.get("revenue", 0),
+            "poster_path": movie_data.get("poster_path"),
+            "backdrop_path": movie_data.get("backdrop_path"),
+            "homepage": movie_data.get("homepage", ""),
+            "imdb_id": movie_data.get("imdb_id"),
+            "adult": movie_data.get("adult", False),
+            "popularity": movie_data.get("popularity", 0.0),
+            "vote_average": movie_data.get("vote_average", 0.0),
+            "vote_count": movie_data.get("vote_count", 0),
+            "main_trailer_key": movie_data.get("main_trailer_key"),
+            "main_trailer_site": movie_data.get("main_trailer_site", "YouTube"),
+            "is_active": True,
+        }
+
+        serializer = MovieCreateSerializer(data=movie_create_data)
+        if not serializer.is_valid():
+            raise ValidationException(
+                detail=_("Invalid movie data from TMDb."),
+                field_errors=serializer.errors,
+            )
+
+        return serializer.save()
+
     # ================================================================
     # WATCHLIST OPERATIONS
     # ================================================================
