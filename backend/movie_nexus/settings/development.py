@@ -77,7 +77,6 @@ CORS_ALLOW_HEADERS = [
     "cache-control",
     "pragma",
 ]
-
 # All HTTP methods
 CORS_ALLOW_METHODS = [
     "DELETE",

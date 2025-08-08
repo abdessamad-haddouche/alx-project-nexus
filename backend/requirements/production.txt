@@ -5,6 +5,9 @@
 gunicorn>=21.2.0
 uvicorn>=0.23.2
 
+# Database URL Parsing for Railway
+dj-database-url>=2.1.0
+
 # Monitoring & Logging
 sentry-sdk>=1.35.0
 
