@@ -3,10 +3,12 @@
 # ================================================================
 
 import logging
+from typing import Any, Dict
 
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from django.core.cache import cache
@@ -46,19 +48,6 @@ class GenreListView(APIView):
         summary="List all movie genres",
         description="""
         Get a list of all movie genres with optional filtering and statistics.
-
-        **Data Strategy:**
-        1. Check local database for genres first
-        2. Auto-sync popular genres from TMDb if database is empty
-        3. Apply filtering and sorting options
-        4. Cache results for optimal performance
-
-        **Features:**
-        - Complete genre metadata (name, slug, TMDb ID)
-        - Movie count per genre
-        - Optional statistical information
-        - Popularity-based sorting
-        - Active/inactive filtering
         """,
         parameters=[
             OpenApiParameter(
@@ -275,8 +264,6 @@ class GenreListView(APIView):
         Create a new movie genre for content categorization.
 
         **Admin Only**: This operation requires admin privileges.
-
-        This is a convenience endpoint that does the same as /genres/create/
         """,
         request=GenreCreateSerializer,
         responses={
@@ -649,17 +636,6 @@ class GenreDeleteView(APIView):
         Soft delete (deactivate) a movie genre.
 
         **Admin Only**: This operation requires admin privileges.
-
-        **Business Impact:**
-        - Movies lose this genre classification
-        - Genre no longer appears in lists
-        - Related caches are invalidated
-        - Movie recommendations may be affected
-
-        **Safety Measures:**
-        - Prevents deletion of genres with many movies (configurable)
-        - Maintains referential integrity
-        - Preserves historical data
         """,
         responses={
             204: None,
@@ -745,387 +721,332 @@ class GenreDeleteView(APIView):
 
 
 class GenreMoviesView(APIView):
-    """
-    Get all movies for a specific genre with intelligent database/TMDb fallback.
-    """
+    """Get movies by genre with clean filtering."""
 
     permission_classes = [AllowAny]
     genre_service = GenreService()
 
     @extend_schema(
         summary="Get movies by genre",
-        description="""
-        Get all movies associated with a specific genre with intelligent
-          fallback strategy.
-
-        **Data Strategy:**
-        1. Check local database for genre and associated movies
-        2. If genre not found locally, sync from TMDb API
-        3. Apply smart filtering and quality controls
-        4. Cache results for optimal performance
-        5. Support pagination and advanced filtering
-
-        **Discovery Features:**
-        - Quality filtering (minimum rating, vote count)
-        - Release year range filtering
-        - Popularity-based sorting
-        - Adult content filtering
-        - Language preferences
-
-        **Performance Optimizations:**
-        - Smart caching (2 hours for stable genre data)
-        - Efficient database queries with select_related
-        - Pagination to handle large result sets
-        - CDN-ready poster URLs
-
-        **Use Cases:**
-        - Genre landing pages (Browse Action movies)
-        - Category-based movie discovery
-        - Filtered browsing experiences
-        - Content recommendation engines
-        - SEO-friendly genre pages
-        """,
+        description="Get all movies for a specific genre with filtering and pagination",
         parameters=[
             OpenApiParameter(
-                name="page",
-                description="Page number (default: 1)",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("First Page", value=1),
-                    OpenApiExample("Second Page", value=2),
-                    OpenApiExample("Page 5", value=5),
-                ],
+                "page", OpenApiTypes.INT, description="Page number (default: 1)"
             ),
             OpenApiParameter(
-                name="page_size",
-                description="Movies per page (default: 20, max: 100)",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Default", value=20),
-                    OpenApiExample("More Results", value=50),
-                    OpenApiExample("Maximum", value=100),
-                ],
+                "page_size",
+                OpenApiTypes.INT,
+                description="Items per page (default: 20, max: 100)",
             ),
             OpenApiParameter(
-                name="min_rating",
-                description="Minimum vote average (default: 0.0)",
-                type=OpenApiTypes.NUMBER,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Any Rating", value=0.0),
-                    OpenApiExample("Good Movies", value=6.0),
-                    OpenApiExample("Great Movies", value=7.5),
-                    OpenApiExample("Masterpieces", value=8.5),
-                ],
+                "min_rating",
+                OpenApiTypes.NUMBER,
+                description="Minimum rating 0-10 (default: 0)",
             ),
             OpenApiParameter(
-                name="min_votes",
-                description="Minimum vote count for reliability (default: 10)",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Any Votes", value=0),
-                    OpenApiExample("Reliable", value=50),
-                    OpenApiExample("Very Reliable", value=500),
-                ],
+                "min_votes",
+                OpenApiTypes.INT,
+                description="Minimum vote count (default: 0)",
             ),
             OpenApiParameter(
-                name="year_from",
-                description="Minimum release year",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("2000s+", value=2000),
-                    OpenApiExample("2010s+", value=2010),
-                    OpenApiExample("Recent", value=2020),
-                ],
+                "year_from", OpenApiTypes.INT, description="Minimum release year"
             ),
             OpenApiParameter(
-                name="year_to",
-                description="Maximum release year",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Up to 2020", value=2020),
-                    OpenApiExample("Up to 2015", value=2015),
-                    OpenApiExample("Classics", value=2000),
-                ],
+                "year_to", OpenApiTypes.INT, description="Maximum release year"
             ),
             OpenApiParameter(
-                name="include_adult",
-                description="Include adult content (default: false)",
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Family Friendly", value=False),
-                    OpenApiExample("Include Adult", value=True),
-                ],
+                "sort_by",
+                OpenApiTypes.STR,
+                description="Sort by: popularity, rating, release_date, title",
             ),
+            OpenApiParameter("order", OpenApiTypes.STR, description="Order: asc, desc"),
             OpenApiParameter(
-                name="sort_by",
-                description="Sorting method",
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                enum=["popularity", "rating", "release_date", "title"],
-                default="popularity",
-                required=False,
-                examples=[
-                    OpenApiExample("Most Popular", value="popularity"),
-                    OpenApiExample("Highest Rated", value="rating"),
-                    OpenApiExample("Newest First", value="release_date"),
-                    OpenApiExample("Alphabetical", value="title"),
-                ],
-            ),
-            OpenApiParameter(
-                name="order",
-                description="Sort order",
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                enum=["asc", "desc"],
-                default="desc",
-                required=False,
-                examples=[
-                    OpenApiExample("Descending", value="desc"),
-                    OpenApiExample("Ascending", value="asc"),
-                ],
-            ),
-            OpenApiParameter(
-                name="force_sync",
-                description="Force sync genre from TMDb API (default: false)",
-                type=OpenApiTypes.BOOL,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                examples=[
-                    OpenApiExample("Use Cache", value=False),
-                    OpenApiExample("Force Refresh", value=True),
-                ],
+                "force_sync",
+                OpenApiTypes.BOOL,
+                description="Skip cache (default: false)",
             ),
         ],
-        responses={
-            200: MovieListSerializer(many=True),
-            404: None,
-            400: None,
-            500: None,
-        },
+        responses={200: MovieListSerializer(many=True)},
         tags=["Movies - Genres"],
     )
     def get(self, request, pk):
-        """Get movies by genre with intelligent database/TMDb fallback."""
+        """Get movies by genre with filtering."""
         try:
             # Parse and validate parameters
+            params = self._parse_parameters(request)
+            if isinstance(params, Response):  # Validation error
+                return params
+
+            # Check cache first (unless force_sync)
+            if not params["force_sync"]:
+                cache_key = self._build_cache_key(pk, params)
+                cached_data = cache.get(cache_key)
+                if cached_data:
+                    return APIResponse.success("Genre movies (cached)", cached_data)
+
+            # Get genre
+            genre = self._get_genre(pk)
+            if isinstance(genre, Response):
+                return genre
+
+            # Get filtered movies
+            response_data = self._get_filtered_movies(genre, params)
+
+            # Cache the response (2 hours)
+            if not params["force_sync"]:
+                cache_key = self._build_cache_key(pk, params)
+                cache.set(cache_key, response_data, 60 * 60 * 2)
+
+            # Build success message
+            total = response_data["pagination"]["total_results"]
+            showing = len(response_data["movies"])
+            message = f"Found {total} {genre.name} movies (showing {showing})"
+
+            return APIResponse.success(message, response_data)
+
+        except Exception as e:
+            logger.error(f"Genre movies error: {e}")
+            return APIResponse.server_error("Failed to get genre movies")
+
+    def _parse_parameters(self, request) -> Dict[str, Any]:
+        """Parse and validate all parameters."""
+        try:
+            # Basic pagination
             page = max(int(request.query_params.get("page", 1)), 1)
             page_size = min(max(int(request.query_params.get("page_size", 20)), 1), 100)
-            min_rating = max(float(request.query_params.get("min_rating", 0.0)), 0.0)
-            min_votes = max(int(request.query_params.get("min_votes", 10)), 0)
+
+            # Rating filters
+            min_rating = float(request.query_params.get("min_rating", 0.0))
+            if min_rating < 0.0 or min_rating > 10.0:
+                return APIResponse.validation_error(
+                    "Invalid min_rating",
+                    {"min_rating": ["Must be between 0.0 and 10.0"]},
+                )
+
+            min_votes = max(int(request.query_params.get("min_votes", 0)), 0)
+
+            # Year filters
             year_from = request.query_params.get("year_from")
             year_to = request.query_params.get("year_to")
-            include_adult = (
-                request.query_params.get("include_adult", "false").lower() == "true"
-            )
+
+            if year_from:
+                year_from = int(year_from)
+                if year_from < 1888 or year_from > 2030:
+                    return APIResponse.validation_error(
+                        "Invalid year_from",
+                        {"year_from": ["Must be between 1888 and 2030"]},
+                    )
+
+            if year_to:
+                year_to = int(year_to)
+                if year_to < 1888 or year_to > 2030:
+                    return APIResponse.validation_error(
+                        "Invalid year_to",
+                        {"year_to": ["Must be between 1888 and 2030"]},
+                    )
+
+            if year_from and year_to and year_from > year_to:
+                return APIResponse.validation_error(
+                    "Invalid year range", {"year_to": ["Must be >= year_from"]}
+                )
+
+            # Sorting
             sort_by = request.query_params.get("sort_by", "popularity")
+            if sort_by not in ["popularity", "rating", "release_date", "title"]:
+                return APIResponse.validation_error(
+                    "Invalid sort_by",
+                    {"sort_by": ["Must be: popularity, rating, release_date, title"]},
+                )
+
             order = request.query_params.get("order", "desc")
+            if order not in ["asc", "desc"]:
+                return APIResponse.validation_error(
+                    "Invalid order", {"order": ["Must be 'asc' or 'desc'"]}
+                )
+
             force_sync = (
                 request.query_params.get("force_sync", "false").lower() == "true"
             )
 
-            # Validate parameters
-            if min_rating > 10.0:
-                return APIResponse.validation_error(
-                    message="Invalid minimum rating",
-                    field_errors={"min_rating": ["Must be between 0.0 and 10.0"]},
-                )
-
-            if year_from and (int(year_from) < 1888 or int(year_from) > 2030):
-                return APIResponse.validation_error(
-                    message="Invalid year_from",
-                    field_errors={"year_from": ["Must be between 1888 and 2030"]},
-                )
-
-            if year_to and (int(year_to) < 1888 or int(year_to) > 2030):
-                return APIResponse.validation_error(
-                    message="Invalid year_to",
-                    field_errors={"year_to": ["Must be between 1888 and 2030"]},
-                )
-
-            if sort_by not in ["popularity", "rating", "release_date", "title"]:
-                return APIResponse.validation_error(
-                    message="Invalid sort_by value",
-                    field_errors={
-                        "sort_by": [
-                            "Must be one of: popularity, rating, release_date, title"
-                        ]
-                    },
-                )
-
-            if order not in ["asc", "desc"]:
-                return APIResponse.validation_error(
-                    message="Invalid order value",
-                    field_errors={"order": ["Must be 'asc' or 'desc'"]},
-                )
-
-            # Check cache first (unless force sync)
-            cache_key = (
-                f"genre_movies_{pk}_{page}_{page_size}_{min_rating}_"
-                f"{min_votes}_{year_from}_{year_to}_{include_adult}_"
-                f"{sort_by}_{order}"
-            )
-            if not force_sync:
-                cached_data = cache.get(cache_key)
-                if cached_data:
-                    logger.info(f"Genre movies for ID {pk} retrieved from cache")
-                    return APIResponse.success(
-                        message="Genre movies (cached)", data=cached_data
-                    )
-
-            # Step 1: Try to get genre from local database
-            try:
-                genre = Genre.objects.get(pk=pk, is_active=True)
-                logger.info(f"Genre found in database: {genre.name}")
-            except Genre.DoesNotExist:
-                # Step 2: Try by tmdb_id
-                try:
-                    genre = Genre.objects.get(tmdb_id=pk, is_active=True)
-                    logger.info(f"Genre found by TMDb ID: {genre.name}")
-                except Genre.DoesNotExist:
-                    # Step 3: Try to sync genre from TMDb
-                    logger.info(f"Genre with ID {pk} not found locally")
-                    return APIResponse.not_found(
-                        message=f"Genre with ID {pk} not found",
-                        extra_data={
-                            "searched_id": pk,
-                            "suggestions": [
-                                "Verify the genre ID is correct",
-                                "Check available genres with /api/v1/movies/genres/",
-                                "Genre might not be synced from TMDb yet",
-                            ],
-                        },
-                    )
-
-            # Step 4: Get movies for this genre with filtering
-            try:
-                # Build the base queryset
-                movies_queryset = Movie.objects.filter(
-                    genres=genre, is_active=True
-                ).distinct()
-
-                # Apply filters
-                filters = {}
-
-                # Rating filter
-                if min_rating > 0:
-                    filters["vote_average__gte"] = min_rating
-
-                # Vote count filter
-                if min_votes > 0:
-                    filters["vote_count__gte"] = min_votes
-
-                # Adult content filter
-                if not include_adult:
-                    filters["adult"] = False
-
-                # Year filters
-                if year_from:
-                    filters["release_date__year__gte"] = int(year_from)
-
-                if year_to:
-                    filters["release_date__year__lte"] = int(year_to)
-
-                # Apply filters
-                if filters:
-                    movies_queryset = movies_queryset.filter(**filters)
-
-                # Apply sorting
-                sort_fields = {
-                    "popularity": "popularity",
-                    "rating": "vote_average",
-                    "release_date": "release_date",
-                    "title": "title",
-                }
-
-                sort_field = sort_fields[sort_by]
-                if order == "desc":
-                    sort_field = f"-{sort_field}"
-
-                movies_queryset = movies_queryset.order_by(sort_field, "-popularity")
-
-                # Get total count before pagination
-                total_count = movies_queryset.count()
-
-                # Apply pagination
-                start_index = (page - 1) * page_size
-                end_index = start_index + page_size
-                page_movies = movies_queryset[start_index:end_index]
-
-                # Serialize movies
-                serializer = MovieListSerializer(
-                    page_movies, many=True, context={"request": request}
-                )
-
-                # Build response data
-                response_data = {
-                    "genre": {
-                        "id": genre.id,
-                        "tmdb_id": genre.tmdb_id,
-                        "name": genre.name,
-                        "slug": genre.slug,
-                    },
-                    "movies": serializer.data,
-                    "pagination": {
-                        "page": page,
-                        "page_size": page_size,
-                        "total_pages": (total_count + page_size - 1) // page_size,
-                        "total_results": total_count,
-                        "has_next": end_index < total_count,
-                        "has_previous": page > 1,
-                        "next_page": page + 1 if end_index < total_count else None,
-                        "previous_page": page - 1 if page > 1 else None,
-                    },
-                    "filters_applied": {
-                        "min_rating": min_rating,
-                        "min_votes": min_votes,
-                        "year_from": year_from,
-                        "year_to": year_to,
-                        "include_adult": include_adult,
-                        "sort_by": sort_by,
-                        "order": order,
-                    },
-                    "data_source": "Local Database",
-                    "fetched_at": timezone.now().isoformat(),
-                }
-
-                # Cache for 2 hours (genre movie lists change moderately)
-                cache.set(cache_key, response_data, 60 * 60 * 2)
-
-                logger.info(
-                    f"Retrieved {len(serializer.data)} movies for genre {genre.name}"
-                )
-
-                return APIResponse.success(
-                    message=f"Found {total_count} {genre.name} movies "
-                    f"(showing {len(serializer.data)})",
-                    data=response_data,
-                )
-
-            except Exception as e:
-                logger.error(f"Failed to get movies for genre {genre.name}: {e}")
-                return APIResponse.server_error(
-                    message="Genre movies temporarily unavailable",
-                    extra_data={"genre_name": genre.name},
-                )
+            return {
+                "page": page,
+                "page_size": page_size,
+                "min_rating": min_rating,
+                "min_votes": min_votes,
+                "year_from": year_from,
+                "year_to": year_to,
+                "sort_by": sort_by,
+                "order": order,
+                "force_sync": force_sync,
+            }
 
         except ValueError as e:
             return APIResponse.validation_error(
-                message="Invalid parameter value", field_errors={"parameter": [str(e)]}
+                "Invalid parameter", {"error": [str(e)]}
             )
-        except Exception as e:
-            logger.error(f"Genre movies error: {e}")
-            return APIResponse.server_error(message="Failed to get genre movies")
+
+    def _get_genre(self, pk) -> Genre:
+        """Get genre by ID or TMDb ID."""
+        # Try database ID first
+        try:
+            genre = Genre.objects.get(pk=pk, is_active=True)
+            logger.info(f"Genre found by DB ID: {genre.name}")
+            return genre
+        except (Genre.DoesNotExist, ValueError):
+            pass
+
+        # Try TMDb ID
+        try:
+            genre = Genre.objects.get(tmdb_id=pk, is_active=True)
+            logger.info(f"Genre found by TMDb ID: {genre.name}")
+            return genre
+        except (Genre.DoesNotExist, ValueError):
+            pass
+
+        return APIResponse.not_found(
+            f"Genre with ID {pk} not found",
+            {
+                "searched_id": pk,
+                "suggestion": "Use /api/v1/movies/genres/ to see available genres",
+            },
+        )
+
+    def _get_filtered_movies(
+        self, genre: Genre, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Get movies with all filters applied."""
+        # Start with base queryset
+        queryset = (
+            Movie.objects.filter(
+                movie_genres__genre=genre,  # 🔥 FIX: Use correct relationship
+                is_active=True,
+            )
+            .select_related()
+            .prefetch_related("movie_genres__genre")
+            .distinct()
+        )
+
+        # Apply rating filter
+        if params["min_rating"] > 0:
+            queryset = queryset.filter(vote_average__gte=params["min_rating"])
+
+        # Apply vote count filter
+        if params["min_votes"] > 0:
+            queryset = queryset.filter(vote_count__gte=params["min_votes"])
+
+        # Apply year filters
+        if params["year_from"]:
+            queryset = queryset.filter(release_date__year__gte=params["year_from"])
+
+        if params["year_to"]:
+            queryset = queryset.filter(release_date__year__lte=params["year_to"])
+
+        # Apply sorting
+        sort_field = {
+            "popularity": "popularity",
+            "rating": "vote_average",
+            "release_date": "release_date",
+            "title": "title",
+        }[params["sort_by"]]
+
+        if params["order"] == "desc":
+            sort_field = f"-{sort_field}"
+
+        queryset = queryset.order_by(sort_field, "-popularity")
+
+        # Get total count
+        total_count = queryset.count()
+
+        # Apply pagination
+        start = (params["page"] - 1) * params["page_size"]
+        end = start + params["page_size"]
+        page_movies = queryset[start:end]
+
+        # Serialize movies
+        movies_data = []
+        for movie in page_movies:
+            movie_data = {
+                "id": movie.id,
+                "tmdb_id": movie.tmdb_id,
+                "title": movie.title,
+                "original_title": movie.original_title,
+                "overview": movie.overview[:200] + "..."
+                if len(movie.overview) > 200
+                else movie.overview,
+                "release_date": movie.release_date.isoformat()
+                if movie.release_date
+                else None,
+                "release_year": movie.release_year,
+                "popularity": movie.popularity,
+                "vote_average": movie.vote_average,
+                "vote_count": movie.vote_count,
+                "rating_stars": movie.rating_stars,
+                "original_language": movie.original_language,
+                "poster_path": movie.poster_path,
+                "poster_url": movie.get_poster_url() if movie.poster_path else None,
+                "backdrop_path": movie.backdrop_path,
+                "backdrop_url": movie.get_backdrop_url()
+                if movie.backdrop_path
+                else None,
+                "tmdb_url": movie.tmdb_url,
+                "imdb_url": movie.imdb_url,
+                "genres": movie.genre_names,
+                "primary_genre": movie.primary_genre.name
+                if movie.primary_genre
+                else None,
+                "main_trailer_url": movie.main_trailer_url,
+                "sync_status": movie.sync_status,
+                "is_local": True,
+            }
+            movies_data.append(movie_data)
+
+        # Build response
+        return {
+            "genre": {
+                "id": genre.id,
+                "tmdb_id": genre.tmdb_id,
+                "name": genre.name,
+                "slug": genre.slug,
+            },
+            "movies": movies_data,
+            "pagination": {
+                "page": params["page"],
+                "page_size": params["page_size"],
+                "total_pages": (total_count + params["page_size"] - 1)
+                // params["page_size"],
+                "total_results": total_count,
+                "has_next": end < total_count,
+                "has_previous": params["page"] > 1,
+                "next_page": params["page"] + 1 if end < total_count else None,
+                "previous_page": params["page"] - 1 if params["page"] > 1 else None,
+            },
+            "filters_applied": {
+                "min_rating": params["min_rating"],
+                "min_votes": params["min_votes"],
+                "year_from": params["year_from"],
+                "year_to": params["year_to"],
+                "sort_by": params["sort_by"],
+                "order": params["order"],
+            },
+            "data_source": "Local Database",
+            "fetched_at": timezone.now().isoformat(),
+        }
+
+    def _build_cache_key(self, pk: int, params: Dict[str, Any]) -> str:
+        """Build cache key from parameters."""
+        import hashlib
+
+        key_parts = [
+            str(pk),
+            str(params["page"]),
+            str(params["page_size"]),
+            str(params["min_rating"]),
+            str(params["min_votes"]),
+            str(params["year_from"]) if params["year_from"] else "",
+            str(params["year_to"]) if params["year_to"] else "",
+            params["sort_by"],
+            params["order"],
+        ]
+        key_string = "|".join(key_parts)
+        hash_key = hashlib.md5(key_string.encode()).hexdigest()[:8]
+        return f"genre_movies:{hash_key}"
