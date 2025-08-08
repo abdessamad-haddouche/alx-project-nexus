@@ -1,0 +1,54 @@
+# ================================================================
+# Render.com Configuration for Movie Nexus
+# ================================================================
+
+services:
+  # Main Django Web Service
+  - type: web
+    name: movie-nexus-api
+    env: python
+    buildCommand: |
+      cd backend &&
+      pip install --upgrade pip &&
+      pip install -r requirements/production.txt &&
+      python manage.py collectstatic --noinput --settings=movie_nexus.settings.production
+    startCommand: |
+      cd backend &&
+      python manage.py migrate --noinput --settings=movie_nexus.settings.production &&
+      gunicorn movie_nexus.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    plan: free
+    env:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DJANGO_SETTINGS_MODULE
+        value: movie_nexus.settings.production
+      - key: DEBUG
+        value: False
+      - key: ENVIRONMENT
+        value: production
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TMDB_API_KEY
+        sync: false
+      - key: TMDB_READ_ACCESS_TOKEN
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
+      - key: DJANGO_SUPERUSER_FIRST_NAME
+        value: Admin
+      - key: DJANGO_SUPERUSER_LAST_NAME
+        value: User
+
+  # PostgreSQL Database
+  - type: pserv
+    name: movie-nexus-db
+    env: postgresql
+    plan: free
+
+  # Redis Cache
+  - type: redis
+    name: movie-nexus-redis
+    plan: free

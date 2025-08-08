@@ -1,6 +1,5 @@
-.PHONY: help install dev-install test clean lint format migrate run shell setup-frontend
-.PHONY: docker-build docker-run docker-stop docker-test prod-test railway-test
-.PHONY: deploy-prep railway-logs db-start db-stop db-access redis-start redis-stop
+.PHONY: help install dev-install test clean lint format migrate run shell
+.PHONY: prod-test render-build render-test db-start db-stop db-access redis-start redis-stop
 
 help:
 	@echo "ALX Project Nexus - Movie Recommendation Platform"
@@ -18,17 +17,15 @@ help:
 	@echo " Production Commands:"
 	@echo "  install        Install production dependencies"
 	@echo "  prod-test      Test production settings locally"
-	@echo "  docker-build   Build Docker image"
-	@echo "  docker-run     Run Docker container locally"
-	@echo "  docker-test    Test Docker setup"
-	@echo "  deploy-prep    Prepare for Railway deployment"
+	@echo "  render-build   Test Render build process"
+	@echo "  render-test    Test Render deployment readiness"
 	@echo ""
 	@echo " Database Commands:"
 	@echo "  db-start       Start PostgreSQL service"
 	@echo "  db-stop        Stop PostgreSQL service"
 	@echo "  db-access      Access PostgreSQL database"
 	@echo ""
-	@echo "⚡ Redis Commands:"
+	@echo " Redis Commands:"
 	@echo "  redis-start    Start Redis service"
 	@echo "  redis-stop     Stop Redis service"
 	@echo "  redis-status   Check Redis service status"
@@ -42,14 +39,12 @@ help:
 # ================================================================
 dev-install:
 	pip install -r backend/requirements/development.txt
-	cd backend && pre-commit install
 
 run:
 	cd backend && python manage.py runserver
 
 test:
 	cd backend && python manage.py test
-	cd backend && pytest --cov=apps --cov-report=html
 
 shell:
 	cd backend && python manage.py shell
@@ -75,7 +70,7 @@ clean:
 	find . -type d -name "*.egg-info" -exec rm -rf {} +
 
 # ================================================================
-# Production & Railway Commands
+# Production Commands
 # ================================================================
 install:
 	pip install -r backend/requirements/production.txt
@@ -87,40 +82,22 @@ prod-test:
 	cd backend && DJANGO_SETTINGS_MODULE=movie_nexus.settings.production python manage.py collectstatic --noinput --dry-run
 	@echo "✅ Production test completed!"
 
-docker-build:
-	@echo "Building Docker image..."
-	docker build -t movie-nexus:latest .
-	@echo "✅ Docker image built successfully!"
+# ================================================================
+# Render Commands
+# ================================================================
+render-build:
+	@echo "Testing Render build process..."
+	chmod +x build.sh
+	./build.sh
+	@echo "✅ Render build test completed!"
 
-docker-run:
-	@echo "Running Docker container..."
-	docker run -p 8000:8000 --env-file .env movie-nexus:latest
-
-docker-test:
-	@echo "Testing Docker setup..."
-	docker build -t movie-nexus-test .
-	docker run --rm movie-nexus-test python manage.py check
-	@echo "✅ Docker test completed!"
-
-deploy-prep:
-	@echo "Preparing for Railway deployment..."
-	@echo "Checking required files..."
-	@test -f Dockerfile || (echo "❌ Dockerfile missing!" && exit 1)
-	@test -f entrypoint.sh || (echo "❌ entrypoint.sh missing!" && exit 1)
-	@test -f .dockerignore || (echo "❌ .dockerignore missing!" && exit 1)
+render-test:
+	@echo "Testing Render deployment readiness..."
+	@test -f build.sh || (echo "❌ build.sh missing!" && exit 1)
 	@test -f backend/requirements/production.txt || (echo "❌ production.txt missing!" && exit 1)
 	@echo "✅ All required files present!"
-	@echo "Running production test..."
 	$(MAKE) prod-test
-	@echo ""
-	@echo "✅ Ready for Railway deployment!"
-
-railway-test:
-	@echo "Testing Railway configuration..."
-	@echo "Checking environment variables..."
-	@test -n "$$SECRET_KEY" || (echo "❌ SECRET_KEY not set!" && exit 1)
-	@test -n "$$TMDB_API_KEY" || (echo "❌ TMDB_API_KEY not set!" && exit 1)
-	@echo "✅ Environment variables check passed!"
+	@echo "✅ Ready for Render deployment!"
 
 # ================================================================
 # Database Commands
