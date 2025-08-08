@@ -216,50 +216,73 @@ else:
 # CACHE CONFIGURATION (Redis)
 # ================================================================
 
-CACHES = {
-    "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": config("REDIS_URL", default="redis://127.0.0.1:6379/1"),
-        "TIMEOUT": 3600,  # 1 hour default timeout
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "CONNECTION_POOL_KWARGS": {
-                "max_connections": 50,
-                "retry_on_timeout": True,
-            },
-            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
-            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
-        },
-        "KEY_PREFIX": "movie_nexus",  # Prefix for all cache keys
-        "VERSION": 1,
-    },
-    # Separate cache for sessions
-    "sessions": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": config("REDIS_URL", default="redis://127.0.0.1:6379/2"),
-        "TIMEOUT": 86400,  # 24 hours for sessions
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "CONNECTION_POOL_KWARGS": {
-                "max_connections": 20,
-            },
-        },
-        "KEY_PREFIX": "movie_nexus_session",
-    },
-}
+REDIS_URL = config("REDIS_URL", default="")
 
-# Use Redis for session storage
-SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-SESSION_CACHE_ALIAS = "sessions"
-SESSION_COOKIE_AGE = 86400  # 24 hours
+USE_REDIS_CACHE = (
+    REDIS_URL and REDIS_URL.strip() and REDIS_URL.startswith(("redis://", "rediss://"))
+)
 
-# Cache settings for different environments
+if USE_REDIS_CACHE:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": 3600,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "CONNECTION_POOL_KWARGS": {
+                    "max_connections": 50,
+                    "retry_on_timeout": True,
+                },
+                "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
+                "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+            },
+            "KEY_PREFIX": "movie_nexus",
+            "VERSION": 1,
+        },
+        "sessions": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": 86400,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "CONNECTION_POOL_KWARGS": {
+                    "max_connections": 20,
+                },
+            },
+            "KEY_PREFIX": "movie_nexus_session",
+        },
+    }
+
+    # Redis session storage
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_CACHE_ALIAS = "sessions"
+    SESSION_COOKIE_AGE = 86400
+
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "movie_nexus_cache_table",
+            "TIMEOUT": 3600,
+            "OPTIONS": {
+                "MAX_ENTRIES": 1000,
+                "CULL_FREQUENCY": 3,
+            },
+        }
+    }
+
+    # Database session storage
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
+    SESSION_COOKIE_AGE = 86400
+
+# Cache timeout configurations
 CACHE_TTL = {
-    "DEFAULT": 3600,  # 1 hour
-    "SHORT": 300,  # 5 minutes
-    "MEDIUM": 1800,  # 30 minutes
-    "LONG": 86400,  # 24 hours
-    "WEEK": 604800,  # 1 week
+    "DEFAULT": 3600,
+    "SHORT": 300,
+    "MEDIUM": 1800,
+    "LONG": 86400,
+    "WEEK": 604800,
 }
 
 

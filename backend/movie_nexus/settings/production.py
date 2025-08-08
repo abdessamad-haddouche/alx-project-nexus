@@ -1,5 +1,5 @@
 """
-Production settings for Movie Nexus - Render.com Deployment
+Production settings for Movie Nexus
 """
 
 import dj_database_url
@@ -14,20 +14,26 @@ DEBUG = False
 SECRET_KEY = config("SECRET_KEY")
 
 ALLOWED_HOSTS = [
-    "*.onrender.com",
+    "*.ondigitalocean.app",
+    "*.digitaloceanspaces.com",
     "localhost",
     "127.0.0.1",
 ]
 
 # ===========================
-# DATABASE - RENDER POSTGRESQL
+# DATABASE - DIGITALOCEAN POSTGRESQL
 # ===========================
 DATABASE_URL = config("DATABASE_URL", default="")
 
 if DATABASE_URL:
-    DATABASES = {"default": dj_database_url.parse(DATABASE_URL, conn_max_age=600)}
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
 else:
-    # Fallback for local testing
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -41,28 +47,11 @@ else:
     }
 
 # ===========================
-# CACHE - USE DATABASE CACHE
-# ===========================
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "movie_nexus_cache_table",
-        "TIMEOUT": 3600,
-    }
-}
-
-# ===========================
 # STATIC FILES - WHITENOISE
 # ===========================
 MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
-# ===========================
-# SECURITY - HTTPS
-# ===========================
-SECURE_SSL_REDIRECT = True
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # ===========================
 # CORS
@@ -71,7 +60,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 # ===========================
-# CELERY - KEEP SIMPLE
+# CELERY
 # ===========================
 CELERY_TASK_ALWAYS_EAGER = True
 USE_CELERY_BACKGROUND_TASKS = False
@@ -86,4 +75,25 @@ SPECTACULAR_SETTINGS.update(
     }
 )
 
-print(f"Render Production: DATABASE={'✅' if DATABASE_URL else '❌'}")
+# ===========================
+# LOGGING CONFIGURATION
+# ===========================
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
