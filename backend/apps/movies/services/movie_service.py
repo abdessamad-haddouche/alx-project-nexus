@@ -62,7 +62,6 @@ class MovieService:
         """
         Get complete movie details with caching of formatted data.
         """
-        # Check cache for formatted details first
         cache_key = f"movies:details:{tmdb_id}"
         if not force_sync:
             cached_details = cache.get(cache_key)
@@ -312,21 +311,14 @@ class MovieService:
     # =========================================================================
 
     def get_popular_movies(
-        self, page: int = 1, store_movies: bool = False
+        self, page: int = 1, store_movies: bool = True
     ) -> Dict[str, Any]:
-        """
-        Get popular movies from TMDb with optional storage.
+        """Get popular movies with SEARCH-STYLE storage"""
+        logger.info(
+            f"Getting popular movies, page: {page}, store_movies: {store_movies}"
+        )
 
-        Args:
-            page: Page number for pagination
-            store_movies: Whether to store movies in database
-
-        Returns:
-            Dictionary with popular movies and pagination info
-        """
-        logger.info(f"Getting popular movies, page: {page}")
-
-        cache_key = f"popular_movies:page:{page}"
+        cache_key = f"popular_movies:page:{page}:store:{store_movies}"
         cached_results = cache.get(cache_key)
 
         if cached_results:
@@ -334,10 +326,11 @@ class MovieService:
             return cached_results
 
         try:
-            # Use the correct method call to movies service
+            # Get data from TMDb
             tmdb_results = self.tmdb.movies.get_popular(page=page)
-            formatted_results = self._format_movie_list_results(
-                tmdb_results, store_movies=store_movies
+
+            formatted_results = self._format_search_results(
+                tmdb_results, sync_results=store_movies
             )
 
             cache_timeout = self.cache_settings.get("POPULAR_MOVIES_TTL", 1800)
@@ -349,22 +342,18 @@ class MovieService:
             logger.error(f"Failed to get popular movies: {str(e)}")
             raise TMDbAPIException(f"Failed to get popular movies: {str(e)}")
 
-    def get_trending_movies(self, time_window: str = "day") -> Dict[str, Any]:
-        """
-        Get trending movies from TMDb.
-
-        Args:
-            time_window: 'day' or 'week'
-
-        Returns:
-            Dictionary with trending movies
-        """
+    def get_trending_movies(
+        self, time_window: str = "day", store_movies: bool = True
+    ) -> Dict[str, Any]:
+        """Get trending movies with SEARCH-STYLE storage"""
         if time_window not in ["day", "week"]:
             raise ValidationException("time_window must be 'day' or 'week'")
 
-        logger.info(f"Getting trending movies for time window: {time_window}")
+        logger.info(
+            f"Getting trending movies for time window: {time_window}, store_movies: {store_movies}"
+        )
 
-        cache_key = f"trending_movies:{time_window}"
+        cache_key = f"trending_movies:{time_window}:store:{store_movies}"
         cached_results = cache.get(cache_key)
 
         if cached_results:
@@ -377,9 +366,12 @@ class MovieService:
                 TMDBTimeWindow.DAY if time_window == "day" else TMDBTimeWindow.WEEK
             )
 
-            # FIX: Use the correct method call to movies service
+            # Get data from TMDb
             tmdb_results = self.tmdb.movies.get_trending(time_window=time_window_enum)
-            formatted_results = self._format_movie_list_results(tmdb_results)
+
+            formatted_results = self._format_search_results(
+                tmdb_results, sync_results=store_movies
+            )
 
             cache_timeout = self.cache_settings.get("TRENDING_MOVIES_TTL", 900)
             cache.set(cache_key, formatted_results, cache_timeout)
@@ -390,11 +382,15 @@ class MovieService:
             logger.error(f"Failed to get trending movies: {str(e)}")
             raise TMDbAPIException(f"Failed to get trending movies: {str(e)}")
 
-    def get_top_rated_movies(self, page: int = 1) -> Dict[str, Any]:
-        """Get top-rated movies with caching and error handling."""
-        logger.info(f"Getting top-rated movies, page: {page}")
+    def get_top_rated_movies(
+        self, page: int = 1, store_movies: bool = True
+    ) -> Dict[str, Any]:
+        """Get top-rated movies with SEARCH-STYLE storage"""
+        logger.info(
+            f"Getting top-rated movies, page: {page}, store_movies: {store_movies}"
+        )
 
-        cache_key = f"top_rated_movies_page_{page}"
+        cache_key = f"top_rated_movies_page_{page}_store_{store_movies}"
         cached_results = cache.get(cache_key)
 
         if cached_results:
@@ -402,11 +398,15 @@ class MovieService:
             return cached_results
 
         try:
-            # Use the TMDb service method you just added
+            # Get data from TMDb
             tmdb_results = self.tmdb.movies.get_top_rated(page=page)
 
-            # Format results similar to other methods
-            formatted_results = self._format_movie_list_results(tmdb_results)
+            formatted_results = self._format_search_results(
+                tmdb_results, sync_results=store_movies
+            )
+
+            cache_timeout = self.cache_settings.get("TOP_RATED_MOVIES_TTL", 43200)
+            cache.set(cache_key, formatted_results, cache_timeout)
 
             movie_count = len(formatted_results.get("results", []))
             logger.info(f"Retrieved {movie_count} top-rated movies")
@@ -509,17 +509,20 @@ class MovieService:
 
     def _prepare_movie_defaults(self, tmdb_data: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare default values for movie creation."""
-        # Handle runtime - set to None if 0 or missing
         runtime = tmdb_data.get("runtime")
         if runtime is None or runtime == 0:
             runtime = None
+
+        imdb_id = tmdb_data.get("imdb_id")
+        if imdb_id == "" or imdb_id is None:
+            imdb_id = None
 
         return {
             "title": tmdb_data.get("title", ""),
             "original_title": tmdb_data.get("original_title", ""),
             "overview": tmdb_data.get("overview", ""),
             "release_date": self._parse_date(tmdb_data.get("release_date")),
-            "runtime": runtime,  # None instead of 0
+            "runtime": runtime,
             "status": tmdb_data.get("status", MovieStatus.RELEASED),
             "original_language": tmdb_data.get("original_language", "en"),
             "adult": tmdb_data.get("adult", False),
@@ -531,7 +534,7 @@ class MovieService:
             "budget": tmdb_data.get("budget", 0),
             "revenue": tmdb_data.get("revenue", 0),
             "homepage": tmdb_data.get("homepage") or "",
-            "imdb_id": tmdb_data.get("imdb_id") or "",
+            "imdb_id": imdb_id,
             "tagline": tmdb_data.get("tagline") or "",
             "main_trailer_key": tmdb_data.get("main_trailer_key"),
             "main_trailer_site": tmdb_data.get("main_trailer_site", "YouTube"),
@@ -541,7 +544,6 @@ class MovieService:
         """Update movie fields from TMDb data."""
         fields_to_update = []
 
-        # Map of TMDb fields to Movie model fields
         field_mapping = {
             "title": "title",
             "original_title": "original_title",
@@ -569,11 +571,13 @@ class MovieService:
             if tmdb_field in tmdb_data:
                 value = tmdb_data[tmdb_field]
 
-                # Special handling for date fields
                 if tmdb_field == "release_date":
                     value = self._parse_date(value)
 
-                # Only update if value has changed
+                elif tmdb_field == "imdb_id":
+                    if value == "" or value is None:
+                        value = None
+
                 if getattr(movie, model_field) != value:
                     setattr(movie, model_field, value)
                     fields_to_update.append(model_field)
@@ -740,7 +744,6 @@ class MovieService:
             "primary_genre": movie.primary_genre.name if movie.primary_genre else None,
             "main_trailer_url": movie.main_trailer_url,
             "main_trailer_embed_url": movie.main_trailer_embed_url,
-            ##############################
         }
 
     def _format_search_results(
@@ -764,7 +767,6 @@ class MovieService:
 
                 # Optionally sync to local database
                 if sync_results and tmdb_movie.get("tmdb_id"):
-                    # Trigger background sync (you might want to use Celery here)
                     try:
                         self.sync_movie_from_tmdb(tmdb_movie["tmdb_id"])
                     except Exception as e:
@@ -812,12 +814,10 @@ class MovieService:
                     "original_language": tmdb_movie_data.get("original_language", "en"),
                     "poster_path": tmdb_movie_data.get("poster_path") or "",
                     "backdrop_path": tmdb_movie_data.get("backdrop_path") or "",
-                    # Set defaults for fields not available in list data
                     "runtime": None,
                     "budget": 0,
                     "revenue": 0,
                     "homepage": "",
-                    # ← REMOVED imdb_id completely - let it default to NULL
                     "tagline": "",
                     "main_trailer_key": None,
                     "main_trailer_site": "YouTube",
@@ -841,48 +841,6 @@ class MovieService:
         except Exception as e:
             logger.error(f"Failed to store basic movie {tmdb_id}: {str(e)}")
             return None
-
-    def _format_movie_list_results(
-        self, tmdb_results: Dict, store_movies: bool = False
-    ) -> Dict[str, Any]:
-        """Format movie list results from TMDb with optional storage."""
-        results = []
-
-        for tmdb_movie in tmdb_results.get("results", []):
-            # Get the TMDb ID (could be "id" or "tmdb_id")
-            tmdb_id = tmdb_movie.get("tmdb_id") or tmdb_movie.get("id")
-
-            # If store_movies is True, try to sync to database
-            if store_movies and tmdb_id:
-                try:
-                    # Check if movie already exists
-                    existing_movie = self.get_movie_by_tmdb_id(tmdb_id)
-
-                    if not existing_movie:
-                        # Store the movie in database
-                        logger.info(f"Storing movie {tmdb_id} in database")
-                        stored_movie = self._store_basic_movie(tmdb_movie)
-
-                        if stored_movie:
-                            # Use stored movie data
-                            results.append(self._format_movie_basic(stored_movie))
-                            continue
-                    else:
-                        # Use existing movie
-                        results.append(self._format_movie_basic(existing_movie))
-                        continue
-
-                except Exception as e:
-                    logger.warning(f"Failed to store movie {tmdb_id}: {e}")
-                    # Fall back to TMDb formatting
-
-            # Use TMDb data directly (fallback or when store_movies=False)
-            results.append(self._format_tmdb_movie_basic(tmdb_movie))
-
-        return {
-            "results": results,
-            "pagination": tmdb_results.get("pagination", {}),
-        }
 
     def _format_tmdb_movie_basic(self, tmdb_movie: Dict) -> Dict[str, Any]:
         """Format TMDb movie data for basic display."""
@@ -915,7 +873,7 @@ class MovieService:
             from datetime import datetime
 
             parsed_date = datetime.strptime(date_string, "%Y-%m-%d")
-            return parsed_date.date()  # Return date object, not string
+            return parsed_date.date()
         except (ValueError, TypeError):
             return None
 

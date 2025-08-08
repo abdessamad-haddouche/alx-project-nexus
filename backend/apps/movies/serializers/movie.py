@@ -349,11 +349,13 @@ class MovieCreateSerializer(UserContextMixin, serializers.ModelSerializer):
         """Validate IMDb ID format."""
         if value:
             value = value.strip()
+            if not value:
+                return None
             if not value.startswith("tt") or len(value) < 9:
                 raise serializers.ValidationError(
                     _("IMDb ID must start with 'tt' and be at least 9 characters long.")
                 )
-        return value
+        return value or None
 
     def validate(self, attrs):
         """Cross-field validation."""
