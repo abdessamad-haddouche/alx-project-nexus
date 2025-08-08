@@ -48,7 +48,7 @@ class User(AbstractUser, TimeStampedMixin):
 
     is_email_verified = models.BooleanField(
         _("email verified"),
-        default=False,
+        default=True,
         db_index=True,
         help_text=_("Email verification status."),
     )
