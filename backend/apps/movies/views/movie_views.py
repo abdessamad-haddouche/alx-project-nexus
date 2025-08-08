@@ -2,7 +2,6 @@
 Core Movie CRUD Operations.
 """
 
-import hashlib
 import logging
 from typing import Any, Dict
 
@@ -15,7 +14,6 @@ from rest_framework.views import APIView
 
 from django.core.cache import cache
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -30,226 +28,260 @@ from apps.movies.services import MovieService
 from core.permissions import IsAdminUser
 from core.responses import APIResponse
 
+from ..models import Genre
+
 logger = logging.getLogger(__name__)
 
 
 class MovieListView(APIView):
     """
-    List movies with progressive data loading strategy:
-    1. Cache complete API responses (VIEW level)
-    2. Store partial data from TMDb popular endpoint
-    3. Use database when sufficient movies available
+    Movie listing.
     """
 
     permission_classes = [AllowAny]
     movie_service = MovieService()
 
-    # Cache settings
-    CACHE_TTL = 60 * 30  # 30 minutes for complete responses
-    MIN_MOVIES_FOR_DB = 100
+    # Configuration
+    CACHE_TTL = 60 * 30  # 30 minutes
+    MIN_MOVIES_FOR_API_FALLBACK = 100
 
     @extend_schema(
         summary="List movies",
-        description="""
-        List movies with progressive data loading strategy.
-
-        **Data Strategy:**
-        - Check database first for this specific page
-        - If not enough data → fetch from TMDb API and store as partial data
-        - Store movies with sync_status='partial' for fast browsing
-        - Use database when sufficient movies available
-        """,
+        description="List movies with filtering and smart data loading",
         parameters=[
             OpenApiParameter(
-                name="search",
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Search across title, original title, and overview",
-                examples=[
-                    OpenApiExample("Movie Title", value="batman"),
-                    OpenApiExample("Actor Name", value="leonardo dicaprio"),
-                    OpenApiExample("Keywords", value="superhero action"),
-                ],
+                "search", OpenApiTypes.STR, description="Search in title/overview"
             ),
             OpenApiParameter(
-                name="genre",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Filter by genre (TMDb genre ID)",
-                examples=[
-                    OpenApiExample("Action", value=28),
-                    OpenApiExample("Comedy", value=35),
-                    OpenApiExample("Drama", value=18),
-                ],
+                "genre", OpenApiTypes.INT, description="Filter by TMDb genre ID"
             ),
             OpenApiParameter(
-                name="min_rating",
-                type=OpenApiTypes.NUMBER,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Minimum TMDb rating (0.0-10.0)",
-                examples=[
-                    OpenApiExample("Good Movies", value=7.0),
-                    OpenApiExample("Great Movies", value=8.0),
-                ],
+                "min_rating", OpenApiTypes.NUMBER, description="Minimum rating (0-10)"
             ),
+            OpenApiParameter("page", OpenApiTypes.INT, description="Page number"),
             OpenApiParameter(
-                name="page",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Page number (default: 1)",
-            ),
-            OpenApiParameter(
-                name="page_size",
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-                required=False,
-                description="Items per page (default: 20, max: 100)",
+                "page_size", OpenApiTypes.INT, description="Items per page (max 100)"
             ),
         ],
-        responses={
-            200: MovieListSerializer(many=True),
-            400: None,
-            500: None,
-        },
+        responses={200: MovieListSerializer(many=True)},
         tags=["Movies - Public"],
     )
     def get(self, request) -> Response:
-        """EXACT LOGIC: Page by page storage and retrieval."""
+        """List movies with filtering support."""
         try:
-            search = request.query_params.get("search", "").strip()
-            genre_id = request.query_params.get("genre")
-            min_rating = request.query_params.get("min_rating")
-            page = int(request.query_params.get("page", 1))
-            page_size = min(int(request.query_params.get("page_size", 20)), 100)
+            # Parse and validate parameters
+            params = self._parse_parameters(request)
+            if isinstance(params, Response):  # Validation error
+                return params
 
-            # Check if we have enough movies in database for THIS PAGE
-            total_movies = Movie.objects.filter(is_active=True).count()
-            expected_movies_for_this_page = page * page_size
+            # Check cache first
+            cache_key = self._build_cache_key(params)
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return APIResponse.success("Movies from cache", cached_data)
 
-            # Check if we have enough data for this specific page
-            if total_movies >= expected_movies_for_this_page and not any(
-                [search, genre_id, min_rating]
-            ):
-                # Enough data AND no filters -> use database
-                logger.info(
-                    f"Using DATABASE for page {page} - have {total_movies} movies"
-                )
-                response_data = self._get_from_database(
-                    request, search, genre_id, min_rating, page, page_size
-                )
-                return APIResponse.success(
-                    f"Movies retrieved from DATABASE (page {page})", response_data
-                )
-            else:
-                # Need to get from API and store
-                if any([search, genre_id, min_rating]):
-                    logger.info(f"Using DATABASE for page {page} with filters")
-                    response_data = self._get_from_database(
-                        request, search, genre_id, min_rating, page, page_size
-                    )
-                    return APIResponse.success(
-                        f"Movies retrieved from DATABASE with filters (page {page})",
-                        response_data,
-                    )
-                else:
-                    logger.info(
-                        f"Getting from TMDb API for page {page} - need {expected_movies_for_this_page}, have {total_movies}"
-                    )
-                    response_data = self._get_from_api_and_store(page)
-                    return APIResponse.success(
-                        f"Movies retrieved from TMDb API and STORED (page {page})",
-                        response_data,
-                    )
+            # Determine data source and get movies
+            response_data = self._get_movies(params)
 
-        except ValueError:
-            return APIResponse.validation_error("Invalid page parameters")
+            # Cache the response
+            cache.set(cache_key, response_data, self.CACHE_TTL)
+
+            # Build success message
+            source = response_data.get("data_source", "unknown")
+            count = len(response_data.get("results", []))
+            message = f"Retrieved {count} movies from {source}"
+
+            return APIResponse.success(message, response_data)
+
         except Exception as e:
             logger.error(f"MovieListView error: {e}")
             return APIResponse.server_error("Failed to retrieve movies")
 
-    def _get_cache_key(
-        self, search: str, genre_id: str, min_rating: str, page: int, page_size: int
-    ) -> str:
-        """Generate cache key for complete API response."""
-        key_data = f"movies_list_{page}_{page_size}_{search}_{genre_id}_{min_rating}"
-        return f"view_cache_{hashlib.md5(key_data.encode()).hexdigest()[:8]}"
+    def _parse_parameters(self, request) -> Dict[str, Any]:
+        """Parse and validate request parameters."""
+        try:
+            search = request.query_params.get("search", "").strip()
+            page = int(request.query_params.get("page", 1))
+            page_size = min(int(request.query_params.get("page_size", 20)), 100)
 
-    def _get_from_database(
-        self,
-        request,
-        search: str,
-        genre_id: str,
-        min_rating: str,
-        page: int,
-        page_size: int,
-    ) -> Dict[str, Any]:
-        """Get filtered movies from database."""
-        # Build queryset with optimizations
+            # Parse genre
+            genre_id = request.query_params.get("genre")
+            if genre_id:
+                try:
+                    genre_id = int(genre_id)
+                    # Validate genre exists
+                    if not Genre.objects.filter(
+                        tmdb_id=genre_id, is_active=True
+                    ).exists():
+                        return APIResponse.validation_error(
+                            f"Genre with ID {genre_id} not found",
+                            {"genre": [f"Genre {genre_id} does not exist"]},
+                        )
+                except ValueError:
+                    return APIResponse.validation_error(
+                        "Invalid genre ID", {"genre": ["Must be a valid integer"]}
+                    )
+
+            # Parse min_rating
+            min_rating = request.query_params.get("min_rating")
+            if min_rating:
+                try:
+                    min_rating = float(min_rating)
+                    if not 0.0 <= min_rating <= 10.0:
+                        return APIResponse.validation_error(
+                            "Invalid rating range",
+                            {"min_rating": ["Must be between 0.0 and 10.0"]},
+                        )
+                except ValueError:
+                    return APIResponse.validation_error(
+                        "Invalid rating value",
+                        {"min_rating": ["Must be a valid number"]},
+                    )
+
+            # Validate page parameters
+            if page < 1:
+                return APIResponse.validation_error(
+                    "Invalid page number", {"page": ["Must be at least 1"]}
+                )
+
+            return {
+                "search": search,
+                "genre_id": genre_id,
+                "min_rating": min_rating,
+                "page": page,
+                "page_size": page_size,
+                "has_filters": bool(search or genre_id or min_rating),
+            }
+
+        except ValueError:
+            return APIResponse.validation_error("Invalid parameter values")
+
+    def _get_movies(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get movies using smart data source selection."""
+        # Always use database if we have filters
+        if params["has_filters"]:
+            return self._get_from_database(params)
+
+        # For no filters, check if we have enough data in database
+        total_movies = Movie.objects.filter(is_active=True).count()
+        expected_movies = params["page"] * params["page_size"]
+
+        if total_movies >= expected_movies:
+            return self._get_from_database(params)
+        else:
+            return self._get_from_api_and_store(params)
+
+    def _get_from_database(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get movies from database with proper filtering."""
+        # Build optimized queryset
         queryset = (
             Movie.objects.select_related()
-            .prefetch_related("genres")
+            .prefetch_related("movie_genres__genre")
             .filter(is_active=True)
         )
 
         # Apply filters
-        if search:
+        if params["search"]:
             queryset = queryset.filter(
-                Q(title__icontains=search)
-                | Q(original_title__icontains=search)
-                | Q(overview__icontains=search)
+                Q(title__icontains=params["search"])
+                | Q(original_title__icontains=params["search"])
+                | Q(overview__icontains=params["search"])
             )
-        if genre_id:
-            try:
-                queryset = queryset.filter(genres__tmdb_id=int(genre_id))
-            except ValueError:
-                pass
-        if min_rating:
-            try:
-                queryset = queryset.filter(vote_average__gte=float(min_rating))
-            except ValueError:
-                pass
+
+        if params["genre_id"]:
+            queryset = queryset.filter(movie_genres__genre__tmdb_id=params["genre_id"])
+
+        if params["min_rating"]:
+            queryset = queryset.filter(vote_average__gte=params["min_rating"])
+
+        if params["genre_id"] and not queryset.exists():
+            return {
+                "results": [],
+                "pagination": {
+                    "page": params["page"],
+                    "total_pages": 0,
+                    "total_results": 0,
+                    "has_next": False,
+                    "has_previous": False,
+                },
+                "data_source": "DATABASE (no movies with this genre)",
+                "filters_applied": self._get_applied_filters(params),
+            }
 
         # Order and paginate
-        queryset = queryset.order_by("-popularity", "-vote_average")
-        paginator = Paginator(queryset, page_size)
+        queryset = queryset.distinct().order_by("-popularity", "-vote_average")
+        paginator = Paginator(queryset, params["page_size"])
 
         try:
-            movies_page = paginator.page(page)
+            movies_page = paginator.page(params["page"])
         except (PageNotAnInteger, EmptyPage):
             movies_page = paginator.page(1) if paginator.num_pages > 0 else None
 
         if not movies_page or not movies_page.object_list:
-            return {"results": [], "pagination": {}, "data_source": "DATABASE (empty)"}
+            return {
+                "results": [],
+                "pagination": {},
+                "data_source": "DATABASE (empty)",
+                "filters_applied": self._get_applied_filters(params),
+            }
 
-        # Serialize
-        serializer = MovieListSerializer(
-            movies_page, many=True, context={"request": request}
-        )
+        results = []
+        for movie in movies_page.object_list:
+            movie_data = {
+                "id": movie.id,
+                "tmdb_id": movie.tmdb_id,
+                "title": movie.title,
+                "original_title": movie.original_title,
+                "overview": movie.overview[:200] + "..."
+                if len(movie.overview) > 200
+                else movie.overview,
+                "release_date": movie.release_date.isoformat()
+                if movie.release_date
+                else None,
+                "release_year": movie.release_year,
+                "popularity": movie.popularity,
+                "vote_average": movie.vote_average,
+                "vote_count": movie.vote_count,
+                "rating_stars": movie.rating_stars,
+                "adult": movie.adult,
+                "original_language": movie.original_language,
+                "poster_path": movie.poster_path,
+                "poster_url": movie.get_poster_url() if movie.poster_path else None,
+                "backdrop_path": movie.backdrop_path,
+                "backdrop_url": movie.get_backdrop_url()
+                if movie.backdrop_path
+                else None,
+                "tmdb_url": movie.tmdb_url,
+                "imdb_url": movie.imdb_url,
+                "genres": movie.genre_names,
+                "primary_genre": movie.primary_genre.name
+                if movie.primary_genre
+                else None,
+                "main_trailer_url": movie.main_trailer_url,
+                "is_local": True,
+                "sync_status": movie.sync_status,
+            }
+            results.append(movie_data)
 
         return {
-            "results": serializer.data,
+            "results": results,
             "pagination": {
                 "page": movies_page.number,
                 "total_pages": paginator.num_pages,
                 "total_results": paginator.count,
                 "has_next": movies_page.has_next(),
                 "has_previous": movies_page.has_previous(),
+                "page_size": params["page_size"],
             },
             "data_source": "DATABASE",
-            "page": movies_page.number,
-            "total_movies_in_db": paginator.count,
+            "filters_applied": self._get_applied_filters(params),
         }
 
-    def _get_from_api_and_store(self, page: int) -> Dict[str, Any]:
-        """Get from TMDb API and ACTUALLY STORE the fucking data."""
+    def _get_from_api_and_store(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get from TMDb API and store in database."""
         try:
-            # Get raw data from TMDb API
             api_data = self.movie_service.get_popular_movies(
-                page=page, store_movies=False
+                page=params["page"], store_movies=True  # This will store them
             )
 
             if not api_data.get("results"):
@@ -257,87 +289,43 @@ class MovieListView(APIView):
                     "results": [],
                     "pagination": {},
                     "data_source": "TMDb API (no results)",
-                    "stored_movies": 0,
                 }
-
-            stored_count = self._store_partial_movies(api_data["results"])
-            logger.info(f"STORED {stored_count} movies from TMDb API page {page}")
 
             return {
                 "results": api_data["results"],
                 "pagination": api_data.get("pagination", {}),
-                "data_source": "TMDb API + STORED",
-                "stored_movies": stored_count,
-                "page": page,
-                "total_movies_in_db": Movie.objects.filter(is_active=True).count(),
+                "data_source": "TMDb API (stored in database)",
+                "filters_applied": self._get_applied_filters(params),
             }
 
         except Exception as e:
-            logger.error(f"TMDb API failed for page {page}: {e}")
-            raise
+            logger.error(f"API fallback failed: {e}")
+            return self._get_from_database(params)
 
-    def _store_partial_movies(self, movies_data: list) -> int:
-        """Store movies with sync_status='partial'."""
-        stored = 0
+    def _build_cache_key(self, params: Dict[str, Any]) -> str:
+        """Build cache key from parameters."""
+        import hashlib
 
-        try:
-            with transaction.atomic():
-                for movie in movies_data:
-                    tmdb_id = movie.get("tmdb_id") or movie.get("id")
+        key_parts = [
+            str(params["page"]),
+            str(params["page_size"]),
+            params["search"] or "",
+            str(params["genre_id"]) if params["genre_id"] else "",
+            str(params["min_rating"]) if params["min_rating"] else "",
+        ]
+        key_string = "|".join(key_parts)
+        hash_key = hashlib.md5(key_string.encode()).hexdigest()[:8]
+        return f"movie_list:{hash_key}"
 
-                    if not tmdb_id or Movie.objects.filter(tmdb_id=tmdb_id).exists():
-                        continue
-
-                    # Create with partial data - INCLUDE ALL REQUIRED FIELDS
-                    Movie.objects.create(
-                        tmdb_id=str(tmdb_id),
-                        title=movie.get("title", ""),
-                        original_title=movie.get("original_title", "")
-                        or movie.get("title", ""),
-                        overview=movie.get("overview", ""),
-                        release_date=self._parse_date(movie.get("release_date")),
-                        adult=movie.get("adult", False),
-                        popularity=movie.get("popularity", 0.0),
-                        vote_average=movie.get("vote_average", 0.0),
-                        vote_count=movie.get("vote_count", 0),
-                        original_language=movie.get("original_language", "en"),
-                        poster_path=movie.get("poster_path") or "",
-                        backdrop_path=movie.get("backdrop_path") or "",
-                        # PARTIAL DATA STATUS
-                        sync_status="partial",
-                        last_synced=timezone.now(),
-                        is_active=True,
-                        # Defaults for missing fields
-                        runtime=None,
-                        budget=0,
-                        revenue=0,
-                        homepage="",
-                        tagline="",
-                        main_trailer_key=None,
-                        main_trailer_site="YouTube",
-                        status="Released",
-                    )
-                    stored += 1
-                    logger.info(
-                        f"STORED movie: {movie.get('title')} (TMDb ID: {tmdb_id})"
-                    )
-
-        except Exception as e:
-            logger.error(f"Error storing partial movies: {e}")
-
-        logger.info(f"Stored {stored} partial movies")
-        return stored
-
-    def _parse_date(self, date_string: str):
-        """Parse date string to date object."""
-        if not date_string:
-            return None
-        try:
-            from datetime import datetime
-
-            return datetime.strptime(date_string, "%Y-%m-%d").date()
-        except (ValueError, TypeError):
-            return None
+    def _get_applied_filters(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get summary of applied filters."""
+        return {
+            "search": params["search"] or None,
+            "genre_id": params["genre_id"],
+            "min_rating": params["min_rating"],
+            "page": params["page"],
+            "page_size": params["page_size"],
+        }
 
 
 class MovieDetailView(APIView):

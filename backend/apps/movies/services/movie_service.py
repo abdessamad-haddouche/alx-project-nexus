@@ -818,6 +818,7 @@ class MovieService:
                     "budget": 0,
                     "revenue": 0,
                     "homepage": "",
+                    "imdb_id": tmdb_movie_data.get("imdb_id") or None,
                     "tagline": "",
                     "main_trailer_key": None,
                     "main_trailer_site": "YouTube",
