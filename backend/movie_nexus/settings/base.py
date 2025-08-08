@@ -8,6 +8,7 @@ Environment-specific settings go in development.py, production.py, testing.py
 from datetime import timedelta
 from pathlib import Path
 
+import dj_database_url
 from decouple import config
 
 # ================================================================
@@ -181,20 +182,34 @@ WSGI_APPLICATION = "movie_nexus.wsgi.application"
 # ================================================================
 # DATABASE CONFIGURATION
 # ================================================================
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME", default="movie_nexus_dev"),
-        "USER": config("DB_USER", default="movie_nexus_user"),
-        "PASSWORD": config("DB_PASSWORD"),
-        "HOST": config("DB_HOST", default="localhost"),
-        "PORT": config("DB_PORT", default="5432"),
-        "CONN_MAX_AGE": 600,
-        "OPTIONS": {
-            "connect_timeout": 10,
-        },
+ENVIRONMENT = config("ENVIRONMENT", default="development")
+
+if ENVIRONMENT == "production":
+    # Production: Use DATABASE_URL
+    DATABASE_URL = config("DATABASE_URL")
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    # Development: Use local database settings
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": config("DB_NAME", default="movie_nexus_dev"),
+            "USER": config("DB_USER", default="movie_nexus_user"),
+            "PASSWORD": config("DB_PASSWORD", default="9wa4459AwAdp"),
+            "HOST": config("DB_HOST", default="localhost"),
+            "PORT": config("DB_PORT", default="5432"),
+            "CONN_MAX_AGE": 600,
+            "OPTIONS": {
+                "connect_timeout": 10,
+            },
+        }
+    }
 
 
 # ================================================================
