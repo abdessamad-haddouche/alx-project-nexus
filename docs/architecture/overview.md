@@ -1,21 +1,7 @@
 # Movie Nexus Architecture Overview
 
-> **System Design and Technical Architecture**
+> **System Design and Technical Architecture**  
 > Django REST Framework | PostgreSQL | Redis | TMDb Integration
-
-## 📋 Table of Contents
-
-- [System Overview](#system-overview)
-- [Architecture Patterns](#architecture-patterns)
-- [Application Layer Structure](#application-layer-structure)
-- [Database Design](#database-design)
-- [Service Layer](#service-layer)
-- [Caching Strategy](#caching-strategy)
-- [External Integrations](#external-integrations)
-- [Security Architecture](#security-architecture)
-- [Performance Considerations](#performance-considerations)
-
----
 
 ## 🎯 System Overview
 
@@ -27,17 +13,17 @@ Movie Nexus follows a **service-oriented architecture** with clear separation of
 │   Frontend      │    │   Load Balancer │    │   Django API    │
 │   (Next.js)     │◄──►│   (Nginx)       │◄──►│   (DRF)         │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
-                                                       │
+                                                      │
                        ┌─────────────────┐            │
                        │   Redis Cache   │◄───────────┤
                        │   (Sessions)    │            │
                        └─────────────────┘            │
-                                                       │
+                                                      │
                        ┌─────────────────┐            │
                        │   PostgreSQL    │◄───────────┤
                        │   (Primary DB)  │            │
                        └─────────────────┘            │
-                                                       │
+                                                      │
                        ┌─────────────────┐            │
                        │   TMDb API      │◄───────────┘
                        │   (External)    │
@@ -81,7 +67,7 @@ Custom managers and querysets provide abstraction over data access.
 class MovieManager(models.Manager):
     def get_by_tmdb_id(self, tmdb_id):
         return self.get(tmdb_id=tmdb_id, is_active=True)
-
+    
     def popular_movies(self, limit=20):
         return self.filter(is_active=True).order_by('-popularity')[:limit]
 ```
@@ -140,12 +126,15 @@ backend/core/
 ### Core Entities and Relationships
 
 ```sql
--- User Management
+-- Auth Management
 auth_user (Django's User model extended)
-auth_user_profile (One-to-One with User)
 auth_user_session (User authentication sessions)
+auth_verification_token (Email verification & password reset tokens)
 
--- Movie Catalog
+-- User Management
+auth_user_profile (One-to-One with User)
+
+-- Movie Catalog  
 movies_movie (Core movie entity)
 movies_genre (Movie genres from TMDb)
 movies_movie_genre (Many-to-Many through table)
@@ -170,49 +159,39 @@ Movie.related_movies ↔ Movie.recommended_by (through MovieRecommendation)
 User.favorited_movies ↔ Movie.favorited_by (through Favorite)
 ```
 
+## 🗄️ Database Design
+
+### Complete Database Schema
+![Complete ERD](er_diagrams/complete_erd.png)
+*Complete entity relationship diagram showing all models and relationships*
+
+<details>
+<summary>📊 Domain-Specific ERD Breakdowns</summary>
+
+### Authentication & User Management
+![Authentication ERD](er_diagrams/auth_erd.png)
+
+### User Profiles & Settings  
+![Users ERD](er_diagrams/users_erd.png)
+
+### Movie Catalog System
+![Movies ERD](er_diagrams/movies_erd.png)
+
+### User Favorites & Interactions
+![Favorites ERD](er_diagrams/favorites_erd.png)
+
+</details>
+
+### Core Entities and Relationships
+
+```sql
+
 ### Database Optimization
 - **Strategic Indexing**: High-query fields (tmdb_id, popularity, vote_average)
 - **Relationship Optimization**: `select_related` and `prefetch_related` usage
 - **Constraints**: Database-level data integrity validation
 - **Soft Deletes**: `is_active` field for data preservation
-
----
-
-## ⚙️ Service Layer
-
-### Service Responsibilities
-
-#### MovieService
-```python
-class MovieService:
-    def get_popular_movies(page=1, store_movies=True)
-    def search_movies(query, page=1, sync_results=True)
-    def sync_movie_from_tmdb(tmdb_id)
-    def update_movie_data(movie, tmdb_data)
 ```
-
-#### FavoriteService
-```python
-class FavoriteService:
-    def add_favorite(user, movie_id, user_rating=None, notes="")
-    def remove_favorite(user, movie_id)
-    def get_user_stats(user)
-    def search_user_favorites(user, query)
-```
-
-#### AuthService
-```python
-class AuthService:
-    def authenticate_user(email, password, request)
-    def create_user_account(**user_data)
-    def verify_user_email(verification_token)
-```
-
-### Service Layer Benefits
-- **Business Logic Separation**: Views focus on HTTP handling
-- **Reusability**: Services used across multiple views
-- **Testing**: Easier unit testing of business logic
-- **Consistency**: Standardized data operations
 
 ---
 
@@ -269,7 +248,7 @@ def get_user_stats(self, user):
 ```python
 core/services/tmdb/
 ├── base.py          # Base TMDb client with auth
-├── client.py        # Main TMDb API client
+├── client.py        # Main TMDb API client  
 └── movies.py        # Movie-specific operations
 
 class TMDbMoviesClient:
@@ -285,7 +264,44 @@ class TMDbMoviesClient:
 3. **Background Sync**: Periodic updates for popular content
 4. **Error Handling**: Graceful fallbacks for API failures
 
+#### TMDb Data Flow
+```
+User Request → Check Database → If Missing → Fetch from TMDb → Store & Return
+                    ↓
+              If Exists → Check Freshness → If Stale → Update from TMDb
+                    ↓
+              Return Cached Data
+```
+
+---
+
 ## 🛡️ Security Architecture
+
+### Authentication & Authorization
+
+#### JWT Token Strategy
+```python
+# Token Structure
+{
+  "user_id": 123,
+  "email": "user@example.com", 
+  "email_verified": true,
+  "user_role": "user",
+  "session_id": "abc123",
+  "exp": 1642678800
+}
+```
+
+#### Permission Classes Hierarchy
+```python
+# Custom Permission Classes
+core/permissions.py:
+├── IsAdminUser          # Admin/staff access
+├── IsSuperUserOnly      # Superuser operations
+├── IsOwnerOrReadOnly    # Object ownership
+├── HasRequiredRole      # Role-based access
+└── CanManageMovies      # Business logic permissions
+```
 
 ### Data Protection
 - **Input Validation**: Comprehensive serializer validation
@@ -295,6 +311,42 @@ class TMDbMoviesClient:
 - **Environment Variables**: Sensitive data protection
 
 ---
+
+## ⚠️ Error Handling Architecture
+
+### Custom Exception System
+Comprehensive exception handling with consistent error responses across all API endpoints.
+
+```python
+# Custom Exception Hierarchy
+core/exceptions.py:
+├── BaseAPIException          # Base exception with extra data support
+├── ClientErrorException      # 4xx client errors
+│   ├── ValidationException   # Form/data validation errors
+│   ├── AuthenticationException # Auth-related errors
+│   ├── PermissionException   # Permission denied errors
+│   └── ResourceException     # Not found errors
+└── ServerErrorException      # 5xx server errors
+    ├── TMDbAPIException      # External API failures
+    └── DatabaseException     # Database operation errors
+```
+
+### Error Response Format
+
+ ```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "timestamp": "2025-01-15T10:30:00Z",
+  "errors": {
+    "field_errors": {
+      "email": ["This field is required"],
+      "password": ["Password too weak"]
+    }
+  }
+}
+```
+
 
 ## 📊 Performance Considerations
 
