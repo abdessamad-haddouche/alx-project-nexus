@@ -449,6 +449,16 @@ SPECTACULAR_SETTINGS = {
     "LICENSE": {
         "name": "MIT License",
     },
+    "SERVERS": [
+        {
+            "url": "https://abdessamad.tech/api/v1/",
+            "description": "Production server",
+        },
+        {
+            "url": "http://localhost:8000/api/v1/",
+            "description": "Local development server",
+        },
+    ],
     # API Configuration
     "COMPONENT_SPLIT_REQUEST": True,
     "COMPONENT_NO_READ_ONLY_REQUIRED": True,
