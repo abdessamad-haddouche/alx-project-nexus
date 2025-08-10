@@ -690,8 +690,8 @@ class GenreDeleteView(APIView):
                     self._clear_genre_caches(genre_id)
 
                     logger.info(f"Deleted genre: {genre_name}")
-
-                    return APIResponse.deleted(
+                
+                    return APIResponse.success(
                         message=f"Successfully deleted genre: {genre_name}"
                     )
 
