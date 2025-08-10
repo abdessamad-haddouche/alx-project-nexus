@@ -397,9 +397,7 @@ class MovieDetailView(APIView):
                 movie = self._fetch_and_store_complete(pk)
 
                 if not movie:
-                    return APIResponse.not_found(
-                        "Movie not found on TMDb", {"tmdb_id": pk}
-                    )
+                    return APIResponse.not_found("Movie not found on TMDb")
 
                 # Serialize and cache
                 serializer = MovieDetailSerializer(movie, context={"request": request})

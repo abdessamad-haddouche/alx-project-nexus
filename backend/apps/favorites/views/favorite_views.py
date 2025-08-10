@@ -718,6 +718,19 @@ class UserFavoriteStatsView(APIView):
     @extend_schema(
         summary="Get user favorite statistics",
         description="Get comprehensive statistics about user's favorite activity.",
+        parameters=[
+            OpenApiParameter(
+                name="no_cache",
+                type=OpenApiTypes.BOOL,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Bypass cache and get fresh data (default: true)",
+                examples=[
+                    OpenApiExample("Bypass Cache (Default)", value=True),
+                    OpenApiExample("Use Cache", value=False),
+                ],
+            ),
+        ],
         responses={
             200: UserFavoriteStatsSerializer,
             401: None,
@@ -728,20 +741,26 @@ class UserFavoriteStatsView(APIView):
     def get(self, request) -> Response:
         """Get user's favorite statistics."""
         try:
-            # Check cache first
-            cache_key = f"user_favorite_stats_{request.user.id}"
-            cached_stats = cache.get(cache_key)
+            # Check if user wants to use cache (default is to bypass cache)
+            no_cache = request.query_params.get("no_cache", "true").lower() == "true"
 
-            if cached_stats:
-                return APIResponse.success(
-                    message="User statistics retrieved (cached)", data=cached_stats
-                )
+            if not no_cache:
+                # Check cache first
+                cache_key = f"user_favorite_stats_{request.user.id}"
+                cached_stats = cache.get(cache_key)
+
+                if cached_stats:
+                    return APIResponse.success(
+                        message="User statistics retrieved (cached)", data=cached_stats
+                    )
 
             try:
                 stats = FavoriteService.get_user_stats(user=request.user)
 
-                # Cache for 1 hour
-                cache.set(cache_key, stats, 60 * 60)
+                # Cache for 1 hour (only if not bypassing cache)
+                if not no_cache:
+                    cache_key = f"user_favorite_stats_{request.user.id}"
+                    cache.set(cache_key, stats, 60 * 60)
 
                 return APIResponse.success(
                     message="User statistics retrieved successfully", data=stats
@@ -754,54 +773,3 @@ class UserFavoriteStatsView(APIView):
         except Exception as e:
             logger.error(f"Error in user stats view: {e}")
             return APIResponse.server_error(message="Failed to retrieve statistics")
-
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(
-        summary="Get movie popularity stats",
-        description="Get popularity statistics for a specific movie based on user favorites.",
-        responses={
-            200: MoviePopularityStatsSerializer,
-            401: None,
-            404: None,
-            500: None,
-        },
-        tags=["Favorites - Analytics"],
-    )
-    def get(self, request, movie_id: int) -> Response:
-        """Get movie popularity statistics."""
-        try:
-            # Check cache first
-            cache_key = f"movie_popularity_stats_{movie_id}"
-            cached_stats = cache.get(cache_key)
-
-            if cached_stats:
-                return APIResponse.success(
-                    message="Movie popularity statistics retrieved (cached)",
-                    data=cached_stats,
-                )
-
-            try:
-                stats = FavoriteService.get_movie_popularity_stats(movie_id=movie_id)
-
-                # Cache for 30 minutes
-                cache.set(cache_key, stats, 60 * 30)
-
-                return APIResponse.success(
-                    message="Movie popularity statistics retrieved successfully",
-                    data=stats,
-                )
-
-            except NotFoundException as e:
-                return APIResponse.not_found(message=str(e.detail))
-            except Exception as e:
-                logger.error(f"Service error getting movie popularity: {e}")
-                return APIResponse.server_error(
-                    message="Failed to get movie statistics"
-                )
-
-        except Exception as e:
-            logger.error(f"Error in movie popularity view: {e}")
-            return APIResponse.server_error(
-                message="Failed to retrieve movie statistics"
-            )
