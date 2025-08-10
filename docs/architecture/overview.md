@@ -9,7 +9,7 @@ Movie Nexus follows a **service-oriented architecture** with clear separation of
 
 ### High-Level Architecture
 
-![Movie Nexus Architecture](https://i.ibb.co/Myz22sbf/architecture.png)
+![Movie Nexus Architecture](https://i.ibb.co/BH01WFts/archi.png)
 
 ### Technology Stack
 - **Backend Framework**: Django 5.0+ with Django REST Framework
