@@ -1,6 +1,6 @@
 # Movie Nexus Architecture Overview
 
-> **System Design and Technical Architecture**  
+> **System Design and Technical Architecture**
 > Django REST Framework | PostgreSQL | Redis | TMDb Integration
 
 ## 🎯 System Overview
@@ -8,27 +8,8 @@
 Movie Nexus follows a **service-oriented architecture** with clear separation of concerns, implementing Django best practices for scalability and maintainability.
 
 ### High-Level Architecture
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Load Balancer │    │   Django API    │
-│   (Next.js)     │◄──►│   (Nginx)       │◄──►│   (DRF)         │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                                      │
-                       ┌─────────────────┐            │
-                       │   Redis Cache   │◄───────────┤
-                       │   (Sessions)    │            │
-                       └─────────────────┘            │
-                                                      │
-                       ┌─────────────────┐            │
-                       │   PostgreSQL    │◄───────────┤
-                       │   (Primary DB)  │            │
-                       └─────────────────┘            │
-                                                      │
-                       ┌─────────────────┐            │
-                       │   TMDb API      │◄───────────┘
-                       │   (External)    │
-                       └─────────────────┘
-```
+
+![Movie Nexus Architecture](https://i.ibb.co/Myz22sbf/architecture.png)
 
 ### Technology Stack
 - **Backend Framework**: Django 5.0+ with Django REST Framework
@@ -67,7 +48,7 @@ Custom managers and querysets provide abstraction over data access.
 class MovieManager(models.Manager):
     def get_by_tmdb_id(self, tmdb_id):
         return self.get(tmdb_id=tmdb_id, is_active=True)
-    
+
     def popular_movies(self, limit=20):
         return self.filter(is_active=True).order_by('-popularity')[:limit]
 ```
@@ -125,24 +106,32 @@ backend/core/
 
 ### Core Entities and Relationships
 
-```sql
--- Auth Management
-auth_user (Django's User model extended)
-auth_user_session (User authentication sessions)
-auth_verification_token (Email verification & password reset tokens)
+- **Authentication Management**
+  - `auth_user`
+    Django's User model (extended)
+  - `auth_user_session`
+    User authentication sessions
+  - `auth_verification_token`
+    Email verification & password reset tokens
 
--- User Management
-auth_user_profile (One-to-One with User)
+- **User Management**
+  - `auth_user_profile`
+    One-to-One profile extension of User
 
--- Movie Catalog  
-movies_movie (Core movie entity)
-movies_genre (Movie genres from TMDb)
-movies_movie_genre (Many-to-Many through table)
-movies_movie_recommendation (Movie relationships)
+- **Movie Catalog**
+  - `movies_movie`
+    Core movie entity
+  - `movies_genre`
+    Movie genres (from TMDb)
+  - `movies_movie_genre`
+    Many-to-Many join table between movies and genres
+  - `movies_movie_recommendation`
+    Movie recommendations / relationships
 
--- User Interactions
-favorites_favorite (User's favorite movies)
-```
+- **User Interactions**
+  - `favorites_favorite`
+    User's favorite movies
+
 
 ### Key Relationships
 ```python
@@ -171,7 +160,7 @@ User.favorited_movies ↔ Movie.favorited_by (through Favorite)
 ### Authentication & User Management
 ![Authentication ERD](er_diagrams/auth_erd.png)
 
-### User Profiles & Settings  
+### User Profiles & Settings
 ![Users ERD](er_diagrams/users_erd.png)
 
 ### Movie Catalog System
@@ -184,14 +173,32 @@ User.favorited_movies ↔ Movie.favorited_by (through Favorite)
 
 ### Core Entities and Relationships
 
-```sql
+- **Authentication Management**
+  - `auth_user`
+    Django's User model (extended)
+  - `auth_user_session`
+    User authentication sessions
+  - `auth_verification_token`
+    Email verification & password reset tokens
 
-### Database Optimization
-- **Strategic Indexing**: High-query fields (tmdb_id, popularity, vote_average)
-- **Relationship Optimization**: `select_related` and `prefetch_related` usage
-- **Constraints**: Database-level data integrity validation
-- **Soft Deletes**: `is_active` field for data preservation
-```
+- **User Management**
+  - `auth_user_profile`
+    One-to-One profile extension of User
+
+- **Movie Catalog**
+  - `movies_movie`
+    Core movie entity
+  - `movies_genre`
+    Movie genres (from TMDb)
+  - `movies_movie_genre`
+    Many-to-Many join table between movies and genres
+  - `movies_movie_recommendation`
+    Movie recommendations / relationships
+
+- **User Interactions**
+  - `favorites_favorite`
+    User's favorite movies
+
 
 ---
 
@@ -248,7 +255,7 @@ def get_user_stats(self, user):
 ```python
 core/services/tmdb/
 ├── base.py          # Base TMDb client with auth
-├── client.py        # Main TMDb API client  
+├── client.py        # Main TMDb API client
 └── movies.py        # Movie-specific operations
 
 class TMDbMoviesClient:
@@ -284,7 +291,7 @@ User Request → Check Database → If Missing → Fetch from TMDb → Store & R
 # Token Structure
 {
   "user_id": 123,
-  "email": "user@example.com", 
+  "email": "user@example.com",
   "email_verified": true,
   "user_role": "user",
   "session_id": "abc123",

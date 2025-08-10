@@ -1,24 +1,24 @@
-# 🎬 Nexus — Movie Recommendation App  
+# 🎬 Nexus — Movie Recommendation App
 *ALX ProDev Backend Engineering Capstone Project*
 
-> A robust backend for movie recommendations, seamlessly integrated with a React frontend.  
+> A robust backend for movie recommendations, seamlessly integrated with a React frontend.
 > Part of the ALX ProDev Backend Engineering Program.
 
 ---
 
-### 🚀 API Endpoint  
+### 🚀 API Endpoint
 [https://abdessamad.tech/api/v1/](https://abdessamad.tech/api/v1/)
 
-### 🌐 Live Demo  
+### 🌐 Live Demo
 [https://alx-project-nexus-h9z9.vercel.app/](https://alx-project-nexus-h9z9.vercel.app/)
 
 
 ## 👨‍💻 About the Developer
 
-**Abdessamad Haddouche**  
-Backend Engineer | ALX Software Engineering Graduate  
+**Abdessamad Haddouche**
+Backend Engineer | ALX Software Engineering Graduate
 
-🔗 **GitHub:** [github.com/abdessamad-haddouche](https://github.com/abdessamad-haddouche)  
+🔗 **GitHub:** [github.com/abdessamad-haddouche](https://github.com/abdessamad-haddouche)
 💼 **LinkedIn:** [linkedin.com/in/abdessamad-haddouche](https://linkedin.com/in/abdessamad-haddouche)
 
 
@@ -26,8 +26,8 @@ Backend Engineer | ALX Software Engineering Graduate
 
 This project highlights successful **backend-frontend collaboration** between ALX ProDev programs.
 
-- **Frontend Developer:** [Soumia Bellali](https://github.com/besomi22) *(ALX ProDev Frontend Program)*  
-- **Frontend Repository:** [github.com/besomi22](https://github.com/besomi22)  
+- **Frontend Developer:** [Soumia Bellali](https://github.com/besomi22) *(ALX ProDev Frontend Program)*
+- **Frontend Repository:** [github.com/besomi22](https://github.com/BeSomi22/alx-project-nexus)
 - **Live Frontend Demo:** [https://alx-project-nexus-h9z9.vercel.app/](https://alx-project-nexus-h9z9.vercel.app/)
 
 > Soumia leveraged this backend API to build a modern Next.js frontend, demonstrating seamless API integration and effective cross-program collaboration.
@@ -56,7 +56,7 @@ The **ALX ProDev Backend Engineering Program** is an intensive, industry-focused
 - **Asynchronous Programming** - High-performance concurrent operations
 - **Caching Strategies** - Multi-level caching with Redis for optimal performance
 - **Authentication & Security** - JWT, RBAC, and comprehensive security practices
-- **API Documentation** - Swagger/OpenAPI implementation
+- **API Documentation** - OpenAPI 3 implementation
 - **Background Tasks** - Celery integration for scalable task processing
 
 ### 🚧 Challenges Faced & Solutions Implemented
@@ -86,7 +86,7 @@ The **ALX ProDev Backend Engineering Program** is an intensive, industry-focused
 **Code Quality & Standards:**
 - Service Layer Pattern for business logic separation
 - Custom exception handling for consistent error responses
-- Comprehensive API documentation with Swagger
+- Comprehensive API documentation with OpenAPI 3
 - Strategic use of Django ORM optimization techniques
 - Pre-commit hooks implementation for automated code quality checks (Black, isort, flake8, trailing whitespace, YAML/JSON validation)
 
@@ -240,17 +240,17 @@ alx-project-nexus/
 
 ## 🙏 Acknowledgments
 
-**Special Thanks to ALX Africa Staff:**  
-- The dedicated ALX ProDev Backend Engineering instructors and mentors  
-- The supportive ALX community and fellow learners  
-- The comprehensive curriculum that enabled this project  
+**Special Thanks to ALX Africa Staff:**
+- The dedicated ALX ProDev Backend Engineering instructors and mentors
+- The supportive ALX community and fellow learners
+- The comprehensive curriculum that enabled this project
 
-**Frontend Collaboration:**  
-- **[Soumia Bellali](https://github.com/besomi22)** from ALX ProDev Frontend Program for seamless API integration  
+**Frontend Collaboration:**
+- **[Soumia Bellali](https://github.com/besomi22)** from ALX ProDev Frontend Program for seamless API integration
 
-**Technologies & Communities:**  
-- Django and Django REST Framework communities  
-- The Movie Database (TMDb) for providing an excellent movie data API  
-- Open source contributors whose work made this project possible  
+**Technologies & Communities:**
+- Django and Django REST Framework communities
+- The Movie Database (TMDb) for providing an excellent movie data API
+- Open source contributors whose work made this project possible
 
 ---
