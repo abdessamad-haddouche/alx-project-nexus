@@ -433,11 +433,11 @@ SPECTACULAR_SETTINGS = {
 
     Features:
     - Movie catalog management with TMDb integration
-    - Advanced search and filtering
-    - Personalized recommendations
-    - User authentication with JWT
-    - Genre-based movie discovery
-    - Admin operations for content management
+    - Advanced search and filtering with intelligent caching
+    - TMDb-powered movie recommendations and similar movie discovery
+    - Secure user authentication with JWT tokens & token blacklisting
+    - Genre-based movie discovery and categorization
+    - Comprehensive admin operations for content management
 
     """,
     "VERSION": "1.0.0",
