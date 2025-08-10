@@ -22,7 +22,6 @@ from apps.favorites.serializers import (
     FavoriteSerializer,
     FavoriteToggleSerializer,
     FavoriteUpdateSerializer,
-    MoviePopularityStatsSerializer,
     UserFavoriteStatsSerializer,
     WatchlistSerializer,
 )
@@ -468,7 +467,7 @@ class FavoriteDeleteView(APIView):
                     user=request.user, movie_id=movie_id
                 )
 
-                return APIResponse.deleted(message=result["message"])
+                return APIResponse.success(message=result["message"])
 
             except NotFoundException as e:
                 return APIResponse.not_found(message=str(e.detail))

@@ -737,9 +737,8 @@ class MovieDeleteView(APIView):
             # Clear related caches
             cache.delete(f"movie_detail_{pk}")
             cache.delete(f"movie_detail_{tmdb_id}")
-            cache.delete("movie_list")
 
-            return APIResponse.deleted(message=deletion_message)
+            return APIResponse.success(message=deletion_message)
 
         except Exception as e:
             logger.error(f"Error deleting movie {pk}: {str(e)}")
