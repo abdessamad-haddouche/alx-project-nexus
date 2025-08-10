@@ -6,6 +6,7 @@ django-extensions>=3.2.3
 
 # Database
 psycopg2-binary>=2.9.7
+dj-database-url==2.1.0
 
 # Environment Management
 python-decouple>=3.8
